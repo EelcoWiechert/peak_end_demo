@@ -1,0 +1,21 @@
+body{
+  font: arial sans;
+  font-size: 14pt;
+}  
+div.user{
+  float: left;
+  margin-left: 5px;
+}
+
+div.track{
+  padding: 0px;
+  margin: 0px;
+  height: 64px;
+}
+
+span.trackname{
+}
+img.cover{
+  float: left;
+  clear: right;
+}

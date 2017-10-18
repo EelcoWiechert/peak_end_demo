@@ -1,0 +1,33 @@
+{% extends 'layout.html' %}
+
+{% block body %}
+
+   <div class="container">
+    <div class="span3 well">
+        <center>
+            <img src="{{ user.picture }}" class="img-circle">
+            <h3>{{ user.name }}</h3>
+        </center>
+    </div>
+
+       {% for track in top_tracks %}
+       Omdat je hebt geluistered naar {{ track.name }}
+
+
+       <ul class="list-group">
+
+       {% for recom in recommendations[track.id] %}
+
+           <li class="list-group-item"> {{ recom.name }} - {{ recom.artist }}</li>
+
+       {% endfor %}
+       </ul>
+
+           {{ plot[track.id]|safe }}
+
+       {% endfor %}
+
+
+
+
+{% endblock %}
