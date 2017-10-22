@@ -15,16 +15,42 @@
 
 	</div>
 
+    <div class="row">
+        <div class="col-lg-4"></div>
+        <div class="col-lg-8">
+            <div class="row">
+                <div class="col-lg-2"></div>
+                <div class="col-lg-3"></div>
+                <div class="col-lg-7">
+                    <div class="row">
+                        <div class="col-lg-3"><center>Valence</center></div>
+                        <div class="col-lg-3"><center>Energy</center></div>
+                        <div class="col-lg-3"><center>Danceability</center></div>
+
+                    </div>
+
+
+                </div>
+
+            </div>
+
+
+        </div>
+
+
+
+    </div>
+
     {% for track in top_user_tracks %}
 
         <div class="row">
             <div class="col-lg-4">
-                <h4>Omdat je hebt geluistered naar {{ track.name }}</h4> <br>
+                <h6>Omdat je hebt geluistered naar {{ track.name }}</h6> <br>
                 <img src="{{ track.album.images[0].url }}"  style="max-width: 100%">
 
             </div>
 
-                    <div class="col-lg-6"">
+                    <div class="col-lg-8">
 
                         {% for recom in recommendations[track.id] %}
 
@@ -37,7 +63,7 @@
                                 </div>
 
 
-                                <div class="col-lg-6">
+                                <div class="col-lg-3">
 
                                     <div class="title_show"><p class="song-title">{{ recom.title }}</p></div>
                                     <div class="artist_show"><p class="artist">{{ recom.artist }}</p></div>
@@ -45,7 +71,7 @@
 
 
                                         {% if recom.preview is not none %}
-                                            <audio controls="" autoplay="" name="media">
+                                            <audio autoplay="0" controls="" autoplay="" name="media">
                                                 <source src="{{ recom.preview }}" type="audio/mpeg">
                                             </audio>
                                         {%endif %}
@@ -55,14 +81,18 @@
 
                                 </div>
 
-                                <div class="col-lg-4">
+                                <div class="col-lg-7">
 
                                     <div class="row">
 
                                         {% for feature in recom.features %}
                                             <div class="col-lg-3">
 
-                                                {{ feature }}
+                                                {% set size = feature * 30 %}
+                                                <svg height="100" width="100">
+                                                  <circle cx="50" cy="50" r="{{ size }}" fill-opacity="0.4" fill="red" />
+                                                  <text cx="300" cy="300" fill="black">{{ feature }}</text>
+                                                </svg>
 
 
                                             </div>

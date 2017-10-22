@@ -70,9 +70,15 @@ def spotify_authorized():
     if isinstance(resp, OAuthException):
         return 'Access denied: {0}'.format(resp.message)
     session['oauth_token'] = (resp['access_token'], '')
+
+
     me = spotify.request('/v1/me') # LOAD USER PROFILE
 
-    # DEFINE THE USER
+    '''
+    
+    DEFINE THE USER
+    
+    '''
 
     user ={}
 
@@ -95,7 +101,7 @@ def spotify_authorized():
     for track in top_tracks.data["items"][:NUMBER_OF_PLAYLISTS]:
         time.sleep(0.01)
         recommendations = spotify.request(
-            '/v1/recommendations?seed_tracks=' + str(track['id']) + '&limit=100')
+            '/v1/recommendations?market=NL&seed_tracks=' + str(track['id']) + '&limit=100')
 
         # store info of recommended tracks
         rec_list = []
@@ -132,7 +138,7 @@ def spotify_authorized():
         data = pd.DataFrame.from_dict(variables_to_plot)
 
         x = data.values
-        #x_scaled = preprocessing.normalize(x)
+        # x_scaled = preprocessing.normalize(x)
         df = pd.DataFrame(x, columns=FEATURES_TO_PLOT)
 
         df2 = pd.DataFrame([[0,0,0],[1,1,1]], columns=FEATURES_TO_PLOT)
