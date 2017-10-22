@@ -2,32 +2,99 @@
 
 {% block body %}
 
-   <div class="container">
-    <div class="span3 well">
-        <center>
-            <img src="{{ user.picture }}" class="img-circle">
-            <h3>{{ user.name }}</h3>
-        </center>
+    <div class="container-fluid">
+
+    <div class="row">
+
+	  <div class="col-lg-12">
+          <center>
+              <img src="{{ user.picture }}" class="img-circle">
+              <h3>{{ user.name }}</h3>
+          </center>
+      </div>
+
+	</div>
+
+    {% for track in top_user_tracks %}
+
+        <div class="row">
+            <div class="col-lg-4">
+                <h4>Omdat je hebt geluistered naar {{ track.name }}</h4> <br>
+                <img src="{{ track.album.images[0].url }}"  style="max-width: 100%">
+
+            </div>
+
+                    <div class="col-lg-6"">
+
+                        {% for recom in recommendations[track.id] %}
+
+                            <div class="row">
+
+                                <div class="col-lg-2">
+
+                                    <img class="padding-0" src="{{ recom.cover }}" style="max-width: 100%">
+
+                                </div>
+
+
+                                <div class="col-lg-6">
+
+                                    <div class="title_show"><p class="song-title">{{ recom.title }}</p></div>
+                                    <div class="artist_show"><p class="artist">{{ recom.artist }}</p></div>
+                                    <div>
+
+
+                                        {% if recom.preview is not none %}
+                                            <audio controls="" autoplay="" name="media">
+                                                <source src="{{ recom.preview }}" type="audio/mpeg">
+                                            </audio>
+                                        {%endif %}
+
+
+                                    </div>
+
+                                </div>
+
+                                <div class="col-lg-4">
+
+                                    <div class="row">
+
+                                        {% for feature in recom.features %}
+                                            <div class="col-lg-3">
+
+                                                {{ feature }}
+
+
+                                            </div>
+
+                                        {% endfor %}
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+
+
+
+                        {% endfor %}
+
+
+                    </div>
+
+
+        </div>
+
+
+
+
+
+    {% endfor %}
+
+
+
     </div>
-
-       {% for track in top_tracks %}
-       Omdat je hebt geluistered naar {{ track.name }}
-
-
-       <ul class="list-group">
-
-       {% for recom in recommendations[track.id] %}
-
-           <li class="list-group-item"> {{ recom.name }} - {{ recom.artist }}</li>
-
-       {% endfor %}
-       </ul>
-
-           {{ plot[track.id]|safe }}
-
-       {% endfor %}
-
-
 
 
 {% endblock %}
