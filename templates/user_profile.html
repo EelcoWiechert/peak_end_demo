@@ -26,6 +26,7 @@
                         <div class="col-lg-3"><center>Valence</center></div>
                         <div class="col-lg-3"><center>Energy</center></div>
                         <div class="col-lg-3"><center>Danceability</center></div>
+                        <div class="col-lg-3"><center>Popularity</center></div>
 
                     </div>
 
@@ -90,8 +91,10 @@
 
                                                 {% set size = feature * 30 %}
                                                 <svg height="100" width="100">
-                                                  <circle cx="50" cy="50" r="{{ size }}" fill-opacity="0.4" fill="red" />
-                                                  <text cx="300" cy="300" fill="black">{{ feature }}</text>
+                                                    <g>
+                                                        <circle cx="50" cy="50" r="{{ size }}" fill-opacity="0.4" fill="grey" />
+                                                        <text x="50" y="50" font-family="Verdana" font-size="8" fill="black" text-anchor="middle" alignment-baseline="central">{{ feature }}</text>
+                                                    </g>
                                                 </svg>
 
 

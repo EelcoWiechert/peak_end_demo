@@ -17,7 +17,7 @@ from sklearn.neighbors import KDTree
 NO_PROFILE_REPLACEMENT ="http://blog.ramboll.com/fehmarnbelt/wp-content/themes/ramboll2/images/profile-img.jpg"
 NUMBER_OF_RECOMMENDED_SONGS = 10
 NUMBER_OF_PLAYLISTS = 3
-FEATURES_TO_PLOT = ['valence','energy', 'danceability'] #,"speechiness","acousticness","instrumentalness","liveness"]
+FEATURES_TO_PLOT = ['valence','energy', 'danceability', 'popularity'] #,"speechiness","acousticness","instrumentalness","liveness"]
 POINT_SCALE = 5
 peak_end = ['one', 'five', 'one', 'five','one', 'five', 'one', 'five','one', 'five', 'one', 'five']
 
@@ -101,7 +101,7 @@ def spotify_authorized():
     for track in top_tracks.data["items"][:NUMBER_OF_PLAYLISTS]:
         time.sleep(0.01)
         recommendations = spotify.request(
-            '/v1/recommendations?market=NL&seed_tracks=' + str(track['id']) + '&limit=100')
+            '/v1/recommendations?market=NL&seed_tracks=' + str(track['id']) + '&limit=50')
 
         # store info of recommended tracks
         rec_list = []
@@ -125,15 +125,28 @@ def spotify_authorized():
         for recommended_track in recommendation_list['recommendations']:
             track_ids_string += recommended_track['id'] + ','
 
+        track_ids_string = track_ids_string[:-1]
+
         features_recommended_tracks = spotify.request('/v1/audio-features/?ids=' + str(track_ids_string))
+        print(features_recommended_tracks.data)
+        popularity_recommended_tracks = spotify.request('/v1/tracks/?ids=' + str(track_ids_string))
+        print(track_ids_string)
+        print(popularity_recommended_tracks.data)
 
         variables_to_plot = dict()
-        for item in FEATURES_TO_PLOT:
-            variables_to_plot[item] = []
+        for feat in FEATURES_TO_PLOT[:3]:
+            variables_to_plot[feat] = []
 
+        # Add features
         for feature, values in variables_to_plot.items():
             for track in features_recommended_tracks.data['audio_features']:
                 values.append(track[feature])
+
+        # Add popularity
+        variables_to_plot['popularity'] = []
+        print(popularity_recommended_tracks.data)
+        for track in popularity_recommended_tracks.data['tracks']:
+            variables_to_plot['popularity'].append((track['popularity']/100))
 
         data = pd.DataFrame.from_dict(variables_to_plot)
 
@@ -141,7 +154,7 @@ def spotify_authorized():
         # x_scaled = preprocessing.normalize(x)
         df = pd.DataFrame(x, columns=FEATURES_TO_PLOT)
 
-        df2 = pd.DataFrame([[0,0,0],[1,1,1]], columns=FEATURES_TO_PLOT)
+        df2 = pd.DataFrame([[0,0,0,0],[1,1,1,1]], columns=FEATURES_TO_PLOT)
 
         df = df.append(df2, ignore_index=True)
 
@@ -151,10 +164,10 @@ def spotify_authorized():
 
         distances, indices = nbrs.kneighbors(test_data_numpy)
 
-        for test in indices[100]:
+        for test in indices[50]:
             print(test_data_numpy[test])
 
-        for test in indices[101]:
+        for test in indices[51]:
             print(test_data_numpy[test])
 
         df.plot.scatter(x='valence', y='energy')
@@ -166,11 +179,11 @@ def spotify_authorized():
         good_indices = []
 
         one = []
-        for song in indices[100][1:]:
+        for song in indices[50][1:]:
             print(song)
             one.append({'id':recommendation_list['recommendations'][song]['id'],'title':recommendation_list['recommendations'][song]['name'],'artist':recommendation_list['recommendations'][song]['artist'], 'cover':recommendation_list['recommendations'][song]['cover'], 'preview':recommendation_list['recommendations'][song]['preview'],'indice':song, 'features':test_data_numpy[song]})
         five = []
-        for song in indices[101][1:]:
+        for song in indices[51][1:]:
             print(song)
             five.append({'id':recommendation_list['recommendations'][song]['id'],'title':recommendation_list['recommendations'][song]['name'],'artist':recommendation_list['recommendations'][song]['artist'],'cover':recommendation_list['recommendations'][song]['cover'],'preview':recommendation_list['recommendations'][song]['preview'],'indice':song, 'features':test_data_numpy[song]})
 
