@@ -1,6 +1,36 @@
 {% extends 'layout.html' %}
 
 {% block body %}
+<style>
+    .container {
+      position: relative;
+      width: 100%;
+    }
+
+    .image {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .overlay {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 100%;
+      width: 100%;
+      opacity: 0;
+      transition: .5s ease;
+      background-color: rgba(0, 0, 0, 0.96);
+    }
+
+    .container:hover .overlay {
+      opacity: 0.2;
+    }
+
+</style>
 
 <div class="container-fluid">
 
@@ -19,7 +49,7 @@
     <div class="col-lg-2">
                 <form action="/recommendations1", method="POST">
                         <button type="submit" name="selected_song" value="{{ seed_id }}">Select</button>
-                    </form>
+                </form>
 
     </div>
 
@@ -44,8 +74,17 @@
                 {% for id in ids %}
 
                     <div class="col-lg-2">
-                        <div>
-                          <img src="{{ song_dic[id]['cover'] }}"  style="max-width: 100%" onclick="{% print('clicked') %}">
+                        <div class="container">
+                          <img class="image" src="{{ song_dic[id]['cover'] }}"  style="max-width: 100%" onclick="{% print('clicked') %}">
+                            {% if song_dic[id]['preview'] is not none %}
+                                <div class="overlay">
+                                    <center>
+                                        <audio controls id="aH">
+                                            <source src="{{ song_dic[id]['preview'] }}" type="audio/mpeg">
+                                        </audio>
+                                    </center>
+                                </div>
+                            {%endif %}
                         </div>
 
                         <div class="title_show"><p class="song-title">{{ song_dic[id]['title'] }}</p></div>
