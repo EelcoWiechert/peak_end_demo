@@ -1,0 +1,72 @@
+{% extends 'layout.html' %}
+
+{% block body %}
+
+<div class="container-fluid">
+
+<div class="row">
+    <div class="col-lg-3">
+        <h4>We hebben al wat voor jou gekozen, verfijn hieronder je keuze</h4>
+    </div>
+    <div class="col-lg-2">
+        <img src="{{ image }}"  style="max-width: 100%">
+    </div>
+    <div class="col-lg-2">
+                <div class="title_show"><p class="song-title">{{ title }}</p></div>
+                <div class="artist_show"><p class="artist">{{ artist }}</p></div>
+
+    </div>
+    <div class="col-lg-2">
+                <form action="/recommendations1", method="POST">
+                        <button type="submit" name="selected_song" value="{{ seed_id }}">Select</button>
+                    </form>
+
+    </div>
+
+
+</div>
+
+
+    {% for feature, alternative in alternatives.items() %}
+        {% for hl, ids in alternative.items() %}
+            {% if ids is not none %}
+                <div class="row">
+
+                <h4>Something with {{ hl }} {{ feature }}</h4>
+
+                </div>
+
+            {% endif %}
+
+                <div class="row">
+
+
+                {% for id in ids %}
+
+                    <div class="col-lg-2">
+                        <div>
+                          <img src="{{ song_dic[id]['cover'] }}"  style="max-width: 100%" onclick="{% print('clicked') %}">
+                        </div>
+
+                        <div class="title_show"><p class="song-title">{{ song_dic[id]['title'] }}</p></div>
+                        <div class="artist_show"><p class="artist">{{ song_dic[id]['artist'] }}</p></div>
+
+                        <form action="/find_alternative_songs", method="POST">
+                            <button type="submit" name="song" value="{{ id }},{{ song_dic[id]['title']}},{{ song_dic[id]['artist'] }}, {{ song_dic[id]['cover'] }}">Select</button>
+                        </form>
+
+                    </div>
+
+
+
+            {% endfor %}
+
+            </div>
+
+
+        {% endfor %}
+    {% endfor %}
+
+</div>
+
+{% endblock %}

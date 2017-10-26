@@ -1,25 +1,18 @@
 from flask import Flask, request, session, g, redirect, url_for, abort, render_template, flash, current_app
 from flask_oauthlib.client import OAuth, OAuthException
-from create_plot import *
-import sqlite3
-import time
-import os
-import random
-import pandas as pd
-import numpy as np
-from sklearn.neighbors import NearestNeighbors
-from sklearn import preprocessing
-from scipy import spatial
-from sklearn.neighbors import KDTree
+from seed_song_determine import *
+from user_definition import *
 
+import time
+from create_plot import *
+import pandas as pd
+
+import random
 
 # VARIABLES
-NO_PROFILE_REPLACEMENT ="http://blog.ramboll.com/fehmarnbelt/wp-content/themes/ramboll2/images/profile-img.jpg"
-NUMBER_OF_RECOMMENDED_SONGS = 10
-NUMBER_OF_PLAYLISTS = 3
-FEATURES_TO_PLOT = ['valence','energy', 'danceability', 'popularity'] #,"speechiness","acousticness","instrumentalness","liveness"]
-POINT_SCALE = 5
-peak_end = ['one', 'five', 'one', 'five','one', 'five', 'one', 'five','one', 'five', 'one', 'five']
+FEATURES_TO_PLOT = ['valence','energy']#, 'danceability', 'popularity'] #,"speechiness","acousticness","instrumentalness","liveness"]
+
+FEATURES = ['valence','energy', 'danceability',"acousticness","instrumentalness"]
 
 app = Flask(__name__)
 app.debug = True
@@ -72,152 +65,186 @@ def spotify_authorized():
     session['oauth_token'] = (resp['access_token'], '')
 
 
+    # SPOTIFY REQUESTS
     me = spotify.request('/v1/me') # LOAD USER PROFILE
+    global user
+    user = define_user(me)
 
-    '''
-    
-    DEFINE THE USER
-    
-    '''
+    global song_display_dic
+    song_display_dic = {}
+    song_ids = []
+    for song in user['top_tracks']:
+        try:
+            song_ids.append(song['id'])
+            song_display_dic[song['id']] = {"title": song['name'], "artist": song['artists'][0]['name'],
+                                            "cover": song['album']['images'][1]['url'], "preview": song['preview_url']}
+        except:
+            continue
 
-    user ={}
+    song_display_dic = get_audio_features(song_ids, user, song_display_dic, FEATURES)
 
-    if len(me.data["images"]) == 0:
-        user['picture'] = NO_PROFILE_REPLACEMENT
-    else:
-        user['picture'] = me.data["images"][0]["url"]
+    # DETERMINE A SEED SONG
+    seed = random.choice(user['top_tracks'])
 
-    if not me.data['display_name']:
-        user['name'] = str(me.data['id'])
-    else:
-        user['name'] = str(me.data['display_name'])
+    return redirect(url_for('find_alternative_songs', seed=seed['id'], seed_url=seed['album']['images'][0]['url'], seed_title=seed['name'], seed_artist=seed['artists'][0]['name']))
 
-    # DEFINE RECOMMENDATIONS
-    top_tracks = spotify.request('v1/me/top/tracks') # LOAD MOST PLAYED TRACKS
+@app.route('/find_alternative_songs', methods=['GET', 'POST'])
+def find_alternative_songs():
+    if request.method == 'GET':
+        seed = request.args.get('seed')
+        seed_url = request.args.get('seed_url')
+        seed_title = request.args.get('seed_title')
+        seed_artist = request.args.get('seed_artist')
 
-    # determine seed tracks
-    recommendation_to_user = dict()
-    recommended_items = {}
-    for track in top_tracks.data["items"][:NUMBER_OF_PLAYLISTS]:
-        time.sleep(0.01)
-        recommendations = spotify.request(
-            '/v1/recommendations?market=NL&seed_tracks=' + str(track['id']) + '&limit=50')
+    if request.method == 'POST':
+        test = str(request.form['song'])
+        a = test.split(',')
+        seed = a[0]
+        seed_url = a[3].strip()
+        seed_title = a[1]
+        seed_artist = a[2]
 
-        # store info of recommended tracks
-        rec_list = []
-        for recommendation in recommendations.data['tracks']:
-            rec_lib = {}
-            rec_lib['id'] = recommendation['id']
-            rec_lib['name'] = recommendation['name']
-            rec_lib['artist'] = recommendation['artists'][0]['name']
-            rec_lib['cover'] = recommendation['album']['images'][1]['url']
-            rec_lib['preview'] = recommendation['preview_url']
-            rec_list.append(rec_lib)
-            recommended_items[track['id']] = {}
-            recommended_items[track['id']]['cover'] = track['album']['images'][0]['url']
-            recommended_items[track['id']]['recommendations'] = rec_list
+    # GET CHARACTERISTICS
+    global song_display_dic
+    seed_characteristcs = song_display_dic[seed]
 
-    plot_dic = {}
-    count=0
-    for seed, recommendation_list in recommended_items.items():
-        count+=1
-        track_ids_string = ''
-        for recommended_track in recommendation_list['recommendations']:
-            track_ids_string += recommended_track['id'] + ','
+    # DETERMINE POINT
+    features_of_interest = ['valence', 'energy', 'danceability', 'acousticness','instrumentalness']
 
-        track_ids_string = track_ids_string[:-1]
+    alternative_song_dic = {}
 
-        features_recommended_tracks = spotify.request('/v1/audio-features/?ids=' + str(track_ids_string))
-        print(features_recommended_tracks.data)
-        popularity_recommended_tracks = spotify.request('/v1/tracks/?ids=' + str(track_ids_string))
-        print(track_ids_string)
-        print(popularity_recommended_tracks.data)
+    for feature in features_of_interest:
+        alternative_song_dic[feature] = {'lower': [], 'higher': []}
 
-        variables_to_plot = dict()
-        for feat in FEATURES_TO_PLOT[:3]:
-            variables_to_plot[feat] = []
+    for i in range(50):
+        seed_id, t_features = random.choice(list(song_display_dic.items()))
+        for feature, lists in alternative_song_dic.items():
+            if t_features[feature] > seed_characteristcs[feature]:
+                lists['higher'].append(seed_id)
+            else:
+                lists['lower'].append(seed_id)
 
-        # Add features
-        for feature, values in variables_to_plot.items():
-            for track in features_recommended_tracks.data['audio_features']:
-                values.append(track[feature])
+    for feature, lists in alternative_song_dic.items():
+        if len(lists['higher']) > 0:
+            random.shuffle(lists['higher'])
+            lists['higher'] = lists['higher'][:6]
+        if len(lists['lower']) > 0:
+            random.shuffle(lists['lower'])
+            lists['lower'] = lists['lower'][:6]
 
-        # Add popularity
-        variables_to_plot['popularity'] = []
-        print(popularity_recommended_tracks.data)
-        for track in popularity_recommended_tracks.data['tracks']:
-            variables_to_plot['popularity'].append((track['popularity']/100))
+    return render_template('user_seed_selection.html', seed_id=seed, image = seed_url, title=seed_title, artist=seed_artist,
+                           alternatives=alternative_song_dic, song_dic=song_display_dic)
 
-        data = pd.DataFrame.from_dict(variables_to_plot)
+@app.route('/recommendations1', methods=['GET', 'POST'])
+def recommendations1():
 
-        x = data.values
-        # x_scaled = preprocessing.normalize(x)
-        df = pd.DataFrame(x, columns=FEATURES_TO_PLOT)
+    if request.method == 'POST':
+        seed_id = str(request.form['selected_song'])
 
-        df2 = pd.DataFrame([[0,0,0,0],[1,1,1,1]], columns=FEATURES_TO_PLOT)
+    VAR_FEATURE = 'valence,energy'
+    peak_end = 'low,peak,low,low,end'
 
-        df = df.append(df2, ignore_index=True)
+    return redirect(url_for('condition1', seed_id=seed_id, VAR_FEATURE=VAR_FEATURE, peak_end=peak_end))
 
-        test_data_numpy = df.as_matrix()
 
-        nbrs = NearestNeighbors(n_neighbors=10, algorithm='ball_tree').fit(test_data_numpy)
+@app.route('/condition1', methods=['GET', 'POST'])
+def condition1():
+    if request.method == 'GET':
+        global seed_id
+        seed_id = request.args.get('seed_id')
+        global VAR_FEATURE
+        VAR_FEATURE = request.args.get('VAR_FEATURE').split(',')
+        global peak_end
+        peak_end = request.args.get('peak_end').split(',')
 
-        distances, indices = nbrs.kneighbors(test_data_numpy)
 
-        for test in indices[50]:
-            print(test_data_numpy[test])
+    if request.method == 'POST':
+        valence = request.form.get('valence')
+        energy = request.form.get('energy')
+        danceability = request.form.get('danceability')
+        acousticness = request.form.get('acousticness')
+        instrumentalness = request.form.get('instrumentalness')
 
-        for test in indices[51]:
-            print(test_data_numpy[test])
+        VAR_FEATURE =[]
+        FEATURES_TEMP = [valence, energy, danceability, acousticness, instrumentalness]
 
-        df.plot.scatter(x='valence', y='energy')
-        plt.savefig(str(FEATURES_TO_PLOT[0]) + '_' + str(FEATURES_TO_PLOT[1]) + '_' + str(count) + 'test.png')
+        for f in FEATURES_TEMP:
+            if f is not None:
+                VAR_FEATURE.append(str(f))
 
-        nbrs = NearestNeighbors(n_neighbors=10, algorithm='ball_tree').fit(df.values)
-        distances, indices = nbrs.kneighbors(df.values)
+    global song_display_dic
+    print(seed_id)
 
-        good_indices = []
+    song_display_dic, good_indices = get_recommendations_con1(FEATURES, VAR_FEATURE, song_display_dic, seed_id, peak_end)
 
-        one = []
-        for song in indices[50][1:]:
-            print(song)
-            one.append({'id':recommendation_list['recommendations'][song]['id'],'title':recommendation_list['recommendations'][song]['name'],'artist':recommendation_list['recommendations'][song]['artist'], 'cover':recommendation_list['recommendations'][song]['cover'], 'preview':recommendation_list['recommendations'][song]['preview'],'indice':song, 'features':test_data_numpy[song]})
-        five = []
-        for song in indices[51][1:]:
-            print(song)
-            five.append({'id':recommendation_list['recommendations'][song]['id'],'title':recommendation_list['recommendations'][song]['name'],'artist':recommendation_list['recommendations'][song]['artist'],'cover':recommendation_list['recommendations'][song]['cover'],'preview':recommendation_list['recommendations'][song]['preview'],'indice':song, 'features':test_data_numpy[song]})
+    stat_dic = create_stats_dic(VAR_FEATURE, good_indices, song_display_dic)
 
-        recommendation_to_user[seed] = []
-        for rat in peak_end:
-            if rat == 'one':
-                recommendation_to_user[seed].append(one[0])
-                good_indices.append(one[0]['indice'])
-                del one[0]
-            elif rat == 'five':
-                recommendation_to_user[seed].append(five[0])
-                good_indices.append(one[0]['indice'])
-                del five[0]
+    return render_template('condition_1.html', seed=seed_id, song_dic=song_display_dic, features=FEATURES,
+                           recom=good_indices, stats=stat_dic)
 
-        plot_data = [features_recommended_tracks.data['audio_features'][i] for i in good_indices]
-        plot_code = make_plot(plot_data, FEATURES_TO_PLOT)
-        plot_dic[seed] = plot_code
+@app.route('/condition2', methods=['GET', 'POST'])
+def condition2():
+    if request.method == 'GET':
+        print('ok')
 
-        print(recommendation_to_user)
 
-    return render_template('user_profile.html', user=user, top_user_tracks=top_tracks.data["items"][:NUMBER_OF_PLAYLISTS], recommendations=recommendation_to_user, plot=plot_dic)
+    if request.method == 'POST':
+        valence = request.form.get('valence')
+        energy = request.form.get('energy')
+        danceability = request.form.get('danceability')
+        acousticness = request.form.get('acousticness')
+        instrumentalness = request.form.get('instrumentalness')
 
+        VAR_FEATURE =[]
+        FEATURES_TEMP = [valence, energy, danceability, acousticness, instrumentalness]
+
+        for f in FEATURES_TEMP:
+            if f is not None:
+                VAR_FEATURE.append(str(f))
+
+    global song_display_dic
+    VAR_FEATURE = ['valence','energy']
+
+    song_display_dic, good_indices = get_recommendations_con2(FEATURES, VAR_FEATURE, song_display_dic, seed_id, peak_end)
+
+    stat_dic = create_stats_dic(VAR_FEATURE, good_indices, song_display_dic)
+
+    return render_template('condition_2.html', seed=seed_id, song_dic=song_display_dic, features=FEATURES,
+                           recom=good_indices, stats=stat_dic)
+
+@app.route('/condition3', methods=['GET', 'POST'])
+def condition3():
+    if request.method == 'GET':
+        print('ok')
+
+
+    if request.method == 'POST':
+        valence = request.form.get('valence')
+        energy = request.form.get('energy')
+        danceability = request.form.get('danceability')
+        acousticness = request.form.get('acousticness')
+        instrumentalness = request.form.get('instrumentalness')
+
+        VAR_FEATURE =[]
+        FEATURES_TEMP = [valence, energy, danceability, acousticness, instrumentalness]
+
+        for f in FEATURES_TEMP:
+            if f is not None:
+                VAR_FEATURE.append(str(f))
+
+    global song_display_dic
+    VAR_FEATURE = ['valence','energy']
+
+    song_display_dic, good_indices = get_recommendations_con3(FEATURES, VAR_FEATURE, song_display_dic, seed_id, peak_end)
+
+    stat_dic = create_stats_dic(VAR_FEATURE, good_indices, song_display_dic)
+
+    return render_template('condition_3.html', seed=seed_id, song_dic=song_display_dic, features=FEATURES,
+                           recom=good_indices, stats=stat_dic)
 
 @spotify.tokengetter
 def get_spotify_oauth_token():
     return session.get('oauth_token')
-
-from flask import request
-
-@app.route('/mood_page', methods=['POST'])
-def led_handler():
-    test = str(request.form['fname']) + str(request.form['lname'])
-    return test
-
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1')
