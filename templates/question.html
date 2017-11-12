@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Question</title>
+</head>
+<body>
+
+QUESTIONS
+<br><br>
+Just listened to song: {{ gebruiker.current_song }} in list {{ gebruiker.current_list }}
+
+ <form action="{{ url_for('play_song') }}", method="GET">
+     <button type="submit" name="song">Next song</button>
+ </form>
+
+</body>
+</html>

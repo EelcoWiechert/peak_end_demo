@@ -2,6 +2,7 @@ from flask import Flask, request, session, g, redirect, url_for, abort, render_t
 from flask_oauthlib.client import OAuth, OAuthException
 import matplotlib.pyplot as plt
 import pandas as pd
+import random
 import numpy as np
 import json
 from sklearn.neighbors import NearestNeighbors
@@ -30,102 +31,427 @@ spotify = oauth.remote_app(
     authorize_url='https://accounts.spotify.com/authorize'
 )
 
-def define_user(me):
+def center_point(points):
 
-    @spotify.tokengetter
-    def get_spotify_oauth_token():
-        return session.get('oauth_token')
+    if len(points[0]) > 0:
+        x = [p[0] for p in points]
+    if len(points[0]) > 1:
+        y = [p[1] for p in points]
+    if len(points[0]) > 2:
+        z = [p[2] for p in points]
 
-    # VARIABLES
-    NO_PROFILE_REPLACEMENT ="http://blog.ramboll.com/fehmarnbelt/wp-content/themes/ramboll2/images/profile-img.jpg"
+    if len(points[0]) == 1:
+        centroid_middle_all_data = [sum(x) / len(x)]
+    if len(points[0]) == 2:
+        centroid_middle_all_data = [sum(x) / len(x), sum(y) / len(y)]
+    if len(points[0]) == 3:
+        centroid_middle_all_data = [sum(x) / len(x), sum(y) / len(y), sum(z) / len(z)]
 
-    user ={}
+    return centroid_middle_all_data
 
-    # PROFILE PICTURE
-    if len(me.data["images"]) == 0:
-        user['picture'] = NO_PROFILE_REPLACEMENT
-    else:
-        user['picture'] = me.data["images"][0]["url"]
+class User(object):
 
-    # NAME
-    if not me.data['display_name']:
-        user['name'] = str(me.data['id'])
-    else:
-        user['name'] = str(me.data['display_name'])
+    # Class to load the user and its top tracks
 
-    # MAKE POOL OF TOP TRACKS
-    top_items =[]
-    top_tracks = spotify.request('v1/me/top/tracks?limit=50')  # LOAD MOST PLAYED TRACKS
-    for item in top_tracks.data["items"]:
-        top_items.append(item)
-    while top_tracks.data["next"] is not None:
-        link = str(top_tracks.data["next"]).replace('https://api.spotify.com', '')
-        top_tracks = spotify.request(link)  # LOAD MOST PLAYED TRACKS
-        for item in top_tracks.data["items"]:
-            top_items.append(item)
+    def __init__(self, me):
 
-    user['top_tracks'] = top_items
+        @spotify.tokengetter
+        def get_spotify_oauth_token():
+            return session.get('oauth_token')
 
-    return user
+        # Initialize name
 
-def get_audio_features(list_of_ID, user, song_display_dic, features):
+        if not me.data['display_name']:
+            self.name = str(me.data['id'])
+        else:
+            self.name = str(me.data['display_name'])
 
-    songs_available = True
-    while songs_available:
-        # CREATE REQUEST LINK
+        # Initialize profile picture
+
+        NO_PROFILE_REPLACEMENT = "http://blog.ramboll.com/fehmarnbelt/" \
+                                 "wp-content/themes/ramboll2/images/profile-img.jpg"  # No profile photo link
+
+        if len(me.data["images"]) == 0:
+            self.profile_picture = NO_PROFILE_REPLACEMENT
+        else:
+            self.profile_picture = me.data["images"][0]["url"]
+
+        # Intitialize other information
+        self.most_listened_tracks = []
+        self.seed_song = dict()
+        self.condition = random.choice([1,2,3])
+        self.first_list = random.choice([1,2])
+        self.current_list = 0
+        self.current_song = 0
+        self.devices = dict()
+        self.active_device = ''
+        self.recommendations = []
+
+
+    def get_devices(self):
+
+        @spotify.tokengetter
+        def get_spotify_oauth_token():
+            return session.get('oauth_token')
+
+        devices = spotify.request('/v1/me/player/devices')
+
+        try:
+            self.devices = {x["id"]: x for x in devices.data['devices']}
+
+            for device in devices.data['devices']:
+                if device['is_active']:
+                    self.active_device = device['id']
+
+        except:
+            print('User: %s does currently have no devices' % (str(self.name)))
+
+    def get_top_tracks(self, features, NUMBER_OF_TOP_TRACKS_TO_COLLECT):
+
+        # Initizalize tokengetter
+
+        @spotify.tokengetter
+        def get_spotify_oauth_token():
+            return session.get('oauth_token')
+
+        # Load the basic information to the user object
+
+        top_track_link = 'v1/me/top/tracks?limit=100'
+
+        while len(self.most_listened_tracks) < NUMBER_OF_TOP_TRACKS_TO_COLLECT:
+
+            top_track_data = spotify.request(top_track_link)  # LOAD MOST PLAYED TRACKS
+
+            self.most_listened_tracks.extend(top_track_data.data["items"])
+
+            if top_track_data.data["next"] is not None:
+                top_track_link = str(top_track_data.data["next"]).replace('https://api.spotify.com', '')
+            else:
+                break  # break when there is no next page
+
+        self.most_listened_tracks = {x["id"]: x for x in self.most_listened_tracks}
+
+        list_of_ID = list(self.most_listened_tracks.keys())
+
+        # Get audio features
+
+        while len(list_of_ID) > 0:
+
+            # CREATE REQUEST LINK
+            track_ids_string = ''
+
+            for ID in list_of_ID[:100]:
+                track_ids_string += str(ID) + ','
+
+            link = track_ids_string[:-1]
+            features_recommended_tracks = spotify.request('/v1/audio-features/?ids=' + str(link))
+
+            for track in features_recommended_tracks.data['audio_features']:
+                for F in features:
+                    # Try to add the features to the dictonary. If this gives an error, the song is not in the dictionary
+                    try:
+                        self.most_listened_tracks[track['id']][F] = track[F]
+                    except:
+                        continue
+
+            list_of_ID = list_of_ID[100:]
+
+    '''
+    
+    Choose the seed song random from the users' top tracks
+    
+    '''
+
+    def choose_seed_song(self):
+
+        # CHOOSE A SEED SONG
+        self.seed_song['id'] = random.choice(list(self.most_listened_tracks.keys()))
+        self.seed_song['data'] = self.most_listened_tracks[self.seed_song['id']]
+
+    '''
+
+    Select a random set of 50 songs and postion them relative to the seed song.
+    The alternative songs are presented in containers as given in the discriminating features
+
+    '''
+
+    def select_alternative_songs(self, seed, discriminating_features):
+
+        # GET CHARACTERISTICS
+        seed_characteristics = self.most_listened_tracks[seed]
+
+        alternative_song_dic = {}
+
+        for feature in discriminating_features:
+            alternative_song_dic[feature] = {'lower': [], 'higher': []}
+
+        for i in range(50):
+            seed_id, t_features = random.choice(list(self.most_listened_tracks.items()))
+
+            for feature, lists in alternative_song_dic.items():
+                if t_features[feature] > seed_characteristics[feature]:
+                    lists['higher'].append(seed_id)
+                else:
+                    lists['lower'].append(seed_id)
+
+        # Shuffle the list to avoid that the same albums are shown to the user
+
+        for feature, lists in alternative_song_dic.items():
+            if len(lists['higher']) > 0:
+                random.shuffle(lists['higher'])
+                lists['higher'] = lists['higher'][:6]
+            if len(lists['lower']) > 0:
+                random.shuffle(lists['lower'])
+                lists['lower'] = lists['lower'][:6]
+
+        return alternative_song_dic
+
+    '''
+    
+    Calculate experiment
+    
+    '''
+
+    def calculate_recommendations(self, seed_id, features):
+
+        # Initizalize tokengetter
+
+        @spotify.tokengetter
+        def get_spotify_oauth_token():
+            return session.get('oauth_token')
+
+        # GET THE SET OF RECOMMENDATIONS
+
+        recommendations = spotify.request(
+            '/v1/recommendations?market=NL&seed_tracks=' + str(seed_id) + '&limit=100')
+
+        self.recommendations = {x["id"]: x for x in recommendations.data['tracks']}
+
         track_ids_string = ''
-        n=0
-        for ID in list_of_ID:
-            n+=1
-            track_ids_string += str(ID) + ','
-            if n == 100:
-                break
+        for identifier in list(self.recommendations.keys()):
+            track_ids_string += str(identifier) + ','
 
-        link = track_ids_string[:-1]
-        features_recommended_tracks = spotify.request('/v1/audio-features/?ids=' + str(link))
+        track_ids_string = track_ids_string[:-1]
+
+        features_recommended_tracks = spotify.request('/v1/audio-features/?ids=' + str(track_ids_string))
 
         for track in features_recommended_tracks.data['audio_features']:
             for F in features:
-                if track['id'] not in song_display_dic:
-                    song_display_dic[track['id']] = {}
-                song_display_dic[track['id']][F] = track[F]
+                # Try to add the features to the dictonary. If this gives an error, the song is not in the dictionary
+                self.recommendations[track['id']][F] = track[F]
 
-        list_of_ID = list_of_ID[100:]
+        # CREATE AN ARRAY THAT CONTAINS THE FEATURE VALUES
+        array = []
 
-        if len(list_of_ID) < 1:
-            songs_available = False
+        for identifier, data in self.recommendations.items():
+            array.append([data[features[0]]])
 
-    if MAKE_PLOT:
-        # create plot
-        features_of_interest = ['valence','energy', 'danceability', "speechiness", "acousticness", "instrumentalness", "liveness"]
+        centroid_middle_all_data = center_point(array)
+
+        array.append([0])
+        array.append([1])
+
+        # SPLIT THE SONGS IN TWO CONTAINERS
+        nbrs = NearestNeighbors(n_neighbors=10, algorithm='ball_tree').fit(array)
+        distances, indices = nbrs.kneighbors(array)
+
+        # CALCULATE THE AVERAGE OF THE PEAK-END LIST
+        points = [[array[indices[100][1]][0]], [array[indices[101][1]][0]], [array[indices[100][2]][0]],
+                  [array[indices[100][3]][0]], [array[indices[101][9]][0]]]
+
+        centroid_list1 = center_point(points)
+
+        # CREATE AN ARRAY THAT CONTAINS THE POINTS MARKED AS PEAK AND END
+        peak_end = [list(array[indices[101][1]]), list(array[indices[101][9]])]
+
+        centroid_peak_end = center_point(peak_end)
+
+        array.append(centroid_peak_end)
+        array.append(centroid_middle_all_data)
+        array.append(centroid_list1)
+
+        nbrs = NearestNeighbors(n_neighbors=15, algorithm='ball_tree').fit(array)
+        distances, indices = nbrs.kneighbors(array)
+
+
+        low = []
+        for song in indices[100][1:]:
+            try:
+                low.append(list(self.recommendations.keys())[song])
+            except:
+                continue
+
+        high = []
+        for song in indices[101][1:]:
+            try:
+                high.append(list(self.recommendations.keys())[song])
+            except:
+                continue
+
+        end = []
+        for song in indices[101][9:]:
+            try:
+                end.append(list(self.recommendations.keys())[song])
+            except:
+                continue
+
+        peak_end_value = []
+        for song in indices[102][1:]:
+            try:
+                peak_end_value.append(list(self.recommendations.keys())[song])
+            except:
+                continue
+
+        middle = []
+        for song in indices[103][1:]:
+            try:
+                middle.append(list(self.recommendations.keys())[song])
+            except:
+                continue
+
+        average = []
+        for song in indices[104][1:]:
+            try:
+                average.append(list(self.recommendations.keys())[song])
+            except:
+                continue
+
+
+        self.recommendations_to_user = {'condition_1': {'list_1': [], 'list_2': []},
+                                        'condition_2': {'list_1': [], 'list_2': []},
+                                        'condition_3': {'list_1': [], 'list_2': []}}
+
+        '''
+        
+        CREATE CONDITION 1
+        
+        '''
+
+        # LIST 1 - PEAK_END
+
+        self.recommendations_to_user['condition_1']['list_1'].append(low[0])
+        self.recommendations_to_user['condition_1']['list_1'].append(high[0])
+        self.recommendations_to_user['condition_1']['list_1'].append(low[1])
+        self.recommendations_to_user['condition_1']['list_1'].append(low[2])
+        self.recommendations_to_user['condition_1']['list_1'].append(end[0])
+
+        # LIST 2 - AVERAGE
+
+        self.recommendations_to_user['condition_1']['list_2'].append(peak_end_value[0])
+        self.recommendations_to_user['condition_1']['list_2'].append(peak_end_value[1])
+        self.recommendations_to_user['condition_1']['list_2'].append(peak_end_value[2])
+        self.recommendations_to_user['condition_1']['list_2'].append(peak_end_value[3])
+        self.recommendations_to_user['condition_1']['list_2'].append(peak_end_value[4])
+
+        '''
+
+        CREATE CONDITION 2
+
+        '''
+
+        # LIST 1 - PEAK_END
+
+        self.recommendations_to_user['condition_2']['list_1'].append(low[0])
+        self.recommendations_to_user['condition_2']['list_1'].append(high[0])
+        self.recommendations_to_user['condition_2']['list_1'].append(low[1])
+        self.recommendations_to_user['condition_2']['list_1'].append(low[2])
+        self.recommendations_to_user['condition_2']['list_1'].append(end[0])
+
+        # LIST 2 - PEAK_END
+
+        self.recommendations_to_user['condition_2']['list_2'].append(middle[0])
+        self.recommendations_to_user['condition_2']['list_2'].append(middle[1])
+        self.recommendations_to_user['condition_2']['list_2'].append(middle[2])
+        self.recommendations_to_user['condition_2']['list_2'].append(middle[3])
+        self.recommendations_to_user['condition_2']['list_2'].append(middle[4])
+
+        '''
+
+        CREATE CONDITION 3
+
+        '''
+
+        # LIST 1 - PEAK_END
+
+        self.recommendations_to_user['condition_3']['list_1'].append(low[0])
+        self.recommendations_to_user['condition_3']['list_1'].append(high[0])
+        self.recommendations_to_user['condition_3']['list_1'].append(low[1])
+        self.recommendations_to_user['condition_3']['list_1'].append(low[2])
+        self.recommendations_to_user['condition_3']['list_1'].append(end[0])
+
+        # LIST 2 - PEAK_END
+
+        self.recommendations_to_user['condition_3']['list_2'].append(average[0])
+        self.recommendations_to_user['condition_3']['list_2'].append(average[1])
+        self.recommendations_to_user['condition_3']['list_2'].append(average[2])
+        self.recommendations_to_user['condition_3']['list_2'].append(average[3])
+        self.recommendations_to_user['condition_3']['list_2'].append(average[4])
+
+        self.feature_values = {'condition_1': {'list_1': [], 'list_2': []},
+                               'condition_2': {'list_1': [], 'list_2': []},
+                               'condition_3': {'list_1': [], 'list_2': []}}
+
+        for condition, lists in self.recommendations_to_user.items():
+            for l, i in lists.items():
+                for identifier in i:
+                    self.feature_values[condition][l].append(self.recommendations[identifier][features[0]])
+
+        # row and column sharing
+        x = [1,2,3,4,5]
+        f, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2)
+        # SET TITLE
+        ax1.set_title('List 1')
+        ax2.set_title('List 2')
+        ax1.set_ylim([0, 1])
+        ax2.set_ylim([0, 1])
+        ax3.set_ylim([0, 1])
+        ax4.set_ylim([0, 1])
+        ax5.set_ylim([0, 1])
+        ax6.set_ylim([0, 1])
+        ax1.plot(x, self.feature_values['condition_1']['list_1'])
+        ax2.plot(x, self.feature_values['condition_1']['list_2'])
+        ax3.plot(x, self.feature_values['condition_2']['list_1'])
+        ax4.plot(x, self.feature_values['condition_2']['list_2'])
+        ax5.plot(x, self.feature_values['condition_3']['list_1'])
+        ax6.plot(x, self.feature_values['condition_3']['list_2'])
+        plt.savefig('test.pdf')
+
+
+class Analytics(object):
+
+    def __init__(self):
+        self.features_of_interest = ['valence','energy', 'danceability', "speechiness", "acousticness", "instrumentalness", "liveness"]
+
+    def user_characteristics_plot(self, user, song_display_dic):
+
         datalists = {}
 
-        for feature in features_of_interest:
+        for feature in self.features_of_interest:
             datalists[feature] = []
 
         for track, features in song_display_dic.items():
-            for f in features_of_interest:
+            for f in self.features_of_interest:
                 datalists[f].append(features[f])
 
         # Two subplots, unpack the axes array immediately
         n_bins = 20
         plt.rcParams.update({'font.size': 6})
-        f, (ax1,ax2,ax3,ax4,ax5,ax6,ax7) = plt.subplots(1, len(features_of_interest), sharey=True)
-        ax1.hist(datalists[features_of_interest[0]], n_bins, normed=1, histtype='bar', stacked=True)
-        ax2.hist(datalists[features_of_interest[1]], n_bins, normed=1, histtype='bar', stacked=True)
-        ax3.hist(datalists[features_of_interest[2]], n_bins, normed=1, histtype='bar', stacked=True)
-        ax4.hist(datalists[features_of_interest[3]], n_bins, normed=1, histtype='bar', stacked=True)
-        ax5.hist(datalists[features_of_interest[4]], n_bins, normed=1, histtype='bar', stacked=True)
-        ax6.hist(datalists[features_of_interest[5]], n_bins, normed=1, histtype='bar', stacked=True)
-        ax7.hist(datalists[features_of_interest[6]], n_bins, normed=1, histtype='bar', stacked=True)
+        f, (ax1, ax2, ax3, ax4, ax5, ax6, ax7) = plt.subplots(1, len(self.features_of_interest), sharey=True)
+        ax1.hist(datalists[self.features_of_interest[0]], n_bins, normed=1, histtype='bar', stacked=True)
+        ax2.hist(datalists[self.features_of_interest[1]], n_bins, normed=1, histtype='bar', stacked=True)
+        ax3.hist(datalists[self.features_of_interest[2]], n_bins, normed=1, histtype='bar', stacked=True)
+        ax4.hist(datalists[self.features_of_interest[3]], n_bins, normed=1, histtype='bar', stacked=True)
+        ax5.hist(datalists[self.features_of_interest[4]], n_bins, normed=1, histtype='bar', stacked=True)
+        ax6.hist(datalists[self.features_of_interest[5]], n_bins, normed=1, histtype='bar', stacked=True)
+        ax7.hist(datalists[self.features_of_interest[6]], n_bins, normed=1, histtype='bar', stacked=True)
 
-        ax1.set_title(features_of_interest[0], fontsize=6)
-        ax2.set_title(features_of_interest[1], fontsize=6)
-        ax3.set_title(features_of_interest[2], fontsize=6)
-        ax4.set_title(features_of_interest[3], fontsize=6)
-        ax5.set_title(features_of_interest[4], fontsize=6)
-        ax6.set_title(features_of_interest[5], fontsize=6)
-        ax7.set_title(features_of_interest[6], fontsize=6)
+        ax1.set_title(self.features_of_interest[0], fontsize=6)
+        ax2.set_title(self.features_of_interest[1], fontsize=6)
+        ax3.set_title(self.features_of_interest[2], fontsize=6)
+        ax4.set_title(self.features_of_interest[3], fontsize=6)
+        ax5.set_title(self.features_of_interest[4], fontsize=6)
+        ax6.set_title(self.features_of_interest[5], fontsize=6)
+        ax7.set_title(self.features_of_interest[6], fontsize=6)
 
         ax1.set_xlim(0, 1)
         ax2.set_xlim(0, 1)
@@ -138,441 +464,9 @@ def get_audio_features(list_of_ID, user, song_display_dic, features):
         with open('user_data.json') as data_file:
             data = json.load(data_file)
 
-        data[user['name']] = datalists
+        data[user] = datalists
 
         with open('user_data.json', 'w') as file:
             file.write(json.dumps(data))
 
-        plt.savefig('figure_map/user_profile_' + user['name'] + '.png', dpi=1000)
-
-    return song_display_dic
-
-def get_recommendations_con1(FEATURES, VAR_FEATURE, song_display_dic, seed_id, peak_end):
-    recommendations = spotify.request(
-            '/v1/recommendations?market=NL&seed_tracks=' + str(seed_id) + '&limit=100')
-
-    rec_ids = []
-
-    for recommendation in recommendations.data['tracks']:
-        song_display_dic[recommendation['id']] = {"title": recommendation['name'],
-                                                      "artist": recommendation['artists'][0]['name'],
-                                                      "cover": recommendation['album']['images'][1]['url'],
-                                                      "preview": recommendation['preview_url']}
-        rec_ids.append(recommendation['id'])
-
-    track_ids_string = ''
-    for id in rec_ids:
-        track_ids_string += str(id) + ','
-
-    track_ids_string = track_ids_string[:-1]
-
-    features_recommended_tracks = spotify.request('/v1/audio-features/?ids=' + str(track_ids_string))
-
-    # Add info to general dic
-    for track in features_recommended_tracks.data['audio_features']:
-        if track['id'] not in song_display_dic:
-            song_display_dic[track['id']] = {}
-        for F in FEATURES:
-            song_display_dic[track['id']][F] = track[F]
-
-    variables_to_plot2 = dict()
-    for FEAT in FEATURES:
-        variables_to_plot2[FEAT] = []
-
-    # Add features
-    for F, V in variables_to_plot2.items():
-        for track in features_recommended_tracks.data['audio_features']:
-            V.append(track[F])
-
-    data2 = pd.DataFrame.from_dict(variables_to_plot2)
-
-    low_point = []
-    high_point = []
-
-    for VAR in VAR_FEATURE:
-        low_point.append(0)
-        high_point.append(1)
-
-    data_filtered = data2.filter(items=VAR_FEATURE)
-
-
-    df2 = pd.DataFrame([low_point, high_point], columns=VAR_FEATURE)
-    df = data_filtered.append(df2, ignore_index=True)
-
-    # SPLIT THE SONGS IN TWO CONTAINERS
-    nbrs = NearestNeighbors(n_neighbors=10, algorithm='ball_tree').fit(df.as_matrix())
-    distances, indices = nbrs.kneighbors(df.as_matrix())
-    points = []
-    points.append(list(df.iloc[indices[101][1]])) # PEAK
-    points.append(list(df.iloc[indices[101][9]])) # END
-
-    print(points)
-
-    if len(VAR_FEATURE) > 0:
-        x = [p[0] for p in points]
-    if len(VAR_FEATURE) > 1:
-        y = [p[1] for p in points]
-    if len(VAR_FEATURE) > 2:
-        z = [p[2] for p in points]
-
-    if len(VAR_FEATURE) == 1:
-        centroid_middle_all_data = [sum(x) / len(x)]
-    if len(VAR_FEATURE) == 2:
-        centroid_middle_all_data = [sum(x) / len(x), sum(y) / len(y)]
-    if len(VAR_FEATURE) == 3:
-        centroid_middle_all_data = [sum(x) / len(x), sum(y) / len(y), sum(z) / len(z)]
-
-    df3 = pd.DataFrame([centroid_middle_all_data], columns=VAR_FEATURE)
-    df = df.append(df3, ignore_index=True)
-    nbrs = NearestNeighbors(n_neighbors=10, algorithm='ball_tree').fit(df.as_matrix())
-    distances, indices = nbrs.kneighbors(df.as_matrix())
-
-    good_indices = {'cond_1':[], 'cond_2':[]}
-
-    #df.plot.scatter(x='valence', y='energy')
-    #df.plot.scatter(x=centroid_middle_all_data[0], y=centroid_middle_all_data[1], color='red')
-    #plt.savefig(str(VAR_FEATURE[0]) + '_' + str(VAR_FEATURE[1]) + 'test.png')
-
-    low = []
-    for song in indices[100][1:]:
-        try:
-            low.append(rec_ids[song])
-        except:
-            continue
-
-    high = []
-    for song in indices[101][1:]:
-        try:
-            high.append(rec_ids[song])
-        except:
-            continue
-
-    end = []
-    for song in indices[101][6:]:
-        try:
-            end.append(rec_ids[song])
-        except:
-            continue
-
-    middle = []
-    for song in indices[102][1:]:
-        try:
-            middle.append(rec_ids[song])
-        except:
-            continue
-
-    # MAKE LIST WITH SONGS TO RECOMMEND
-    for rat in peak_end:
-        if rat == 'low':
-            good_indices['cond_1'].append(low[0])
-            del low[0]
-        elif rat == 'peak':
-            good_indices['cond_1'].append(high[0])
-            del high[0]
-        elif rat == 'end':
-            good_indices['cond_1'].append(end[0])
-            del end[0]
-        good_indices['cond_2'].append(middle[0])
-        del middle[0]
-
-    return song_display_dic, good_indices
-
-def get_recommendations_con2(FEATURES, VAR_FEATURE, song_display_dic, seed_id, peak_end):
-    recommendations = spotify.request(
-            '/v1/recommendations?market=NL&seed_tracks=' + str(seed_id) + '&limit=100')
-
-    rec_ids = []
-
-    for recommendation in recommendations.data['tracks']:
-        song_display_dic[recommendation['id']] = {"title": recommendation['name'],
-                                                      "artist": recommendation['artists'][0]['name'],
-                                                      "cover": recommendation['album']['images'][1]['url'],
-                                                      "preview": recommendation['preview_url']}
-        rec_ids.append(recommendation['id'])
-
-    track_ids_string = ''
-    for id in rec_ids:
-        track_ids_string += str(id) + ','
-
-    track_ids_string = track_ids_string[:-1]
-
-    features_recommended_tracks = spotify.request('/v1/audio-features/?ids=' + str(track_ids_string))
-
-    # Add info to general dic
-    for track in features_recommended_tracks.data['audio_features']:
-        if track['id'] not in song_display_dic:
-            song_display_dic[track['id']] = {}
-        for F in FEATURES:
-            song_display_dic[track['id']][F] = track[F]
-
-    variables_to_plot2 = dict()
-    for FEAT in FEATURES:
-        variables_to_plot2[FEAT] = []
-
-    # Add features
-    for F, V in variables_to_plot2.items():
-        for track in features_recommended_tracks.data['audio_features']:
-            V.append(track[F])
-
-    data2 = pd.DataFrame.from_dict(variables_to_plot2)
-
-    low_point = []
-    high_point = []
-
-    for VAR in VAR_FEATURE:
-        low_point.append(0)
-        high_point.append(1)
-
-    data_filtered = data2.filter(items=VAR_FEATURE)
-
-
-    df2 = pd.DataFrame([low_point, high_point], columns=VAR_FEATURE)
-    df = data_filtered.append(df2, ignore_index=True)
-
-    # SPLIT THE SONGS IN TWO CONTAINERS
-    nbrs = NearestNeighbors(n_neighbors=10, algorithm='ball_tree').fit(df.as_matrix())
-    distances, indices = nbrs.kneighbors(df.as_matrix())
-
-    points = []
-    points.append(list(df.iloc[indices[100][1]])) # PEAK
-    points.append(list(df.iloc[indices[101][1]])) # END
-
-    if len(VAR_FEATURE) > 0:
-        x = [p[0] for p in points]
-    if len(VAR_FEATURE) > 1:
-        y = [p[1] for p in points]
-    if len(VAR_FEATURE) > 2:
-        z = [p[2] for p in points]
-
-    if len(VAR_FEATURE) == 1:
-        centroid_middle_all_data = [sum(x) / len(x)]
-    if len(VAR_FEATURE) == 2:
-        centroid_middle_all_data = [sum(x) / len(x), sum(y) / len(y)]
-    if len(VAR_FEATURE) == 3:
-        centroid_middle_all_data = [sum(x) / len(x), sum(y) / len(y), sum(z) / len(z)]
-
-    df3 = pd.DataFrame([centroid_middle_all_data], columns=VAR_FEATURE)
-    df = df.append(df3, ignore_index=True)
-    nbrs = NearestNeighbors(n_neighbors=10, algorithm='ball_tree').fit(df.as_matrix())
-    distances, indices = nbrs.kneighbors(df.as_matrix())
-
-    good_indices = {'cond_1':[], 'cond_2':[]}
-    low = []
-    for song in indices[100][1:]:
-        try:
-            low.append(rec_ids[song])
-        except:
-            continue
-
-    high = []
-    for song in indices[101][1:]:
-        try:
-            high.append(rec_ids[song])
-        except:
-            continue
-
-    end = []
-    for song in indices[101][6:]:
-        try:
-            end.append(rec_ids[song])
-        except:
-            continue
-
-    middle = []
-    for song in indices[102][1:]:
-        try:
-            middle.append(rec_ids[song])
-        except:
-            continue
-
-    # MAKE LIST WITH SONGS TO RECOMMEND
-    for rat in peak_end:
-        if rat == 'low':
-            good_indices['cond_1'].append(low[0])
-            del low[0]
-        elif rat == 'peak':
-            good_indices['cond_1'].append(high[0])
-            del high[0]
-        elif rat == 'end':
-            good_indices['cond_1'].append(end[0])
-            del end[0]
-        good_indices['cond_2'].append(middle[0])
-        del middle[0]
-
-    return song_display_dic, good_indices
-
-def get_recommendations_con3(FEATURES, VAR_FEATURE, song_display_dic, seed_id, peak_end):
-    recommendations = spotify.request(
-            '/v1/recommendations?market=NL&seed_tracks=' + str(seed_id) + '&limit=100')
-
-    rec_ids = []
-
-    for recommendation in recommendations.data['tracks']:
-        song_display_dic[recommendation['id']] = {"title": recommendation['name'],
-                                                      "artist": recommendation['artists'][0]['name'],
-                                                      "cover": recommendation['album']['images'][1]['url'],
-                                                      "preview": recommendation['preview_url']}
-        rec_ids.append(recommendation['id'])
-
-    track_ids_string = ''
-    for id in rec_ids:
-        track_ids_string += str(id) + ','
-
-    track_ids_string = track_ids_string[:-1]
-
-    features_recommended_tracks = spotify.request('/v1/audio-features/?ids=' + str(track_ids_string))
-
-    # Add info to general dic
-    for track in features_recommended_tracks.data['audio_features']:
-        if track['id'] not in song_display_dic:
-            song_display_dic[track['id']] = {}
-        for F in FEATURES:
-            song_display_dic[track['id']][F] = track[F]
-
-    variables_to_plot2 = dict()
-    for FEAT in FEATURES:
-        variables_to_plot2[FEAT] = []
-
-    # Add features
-    for F, V in variables_to_plot2.items():
-        for track in features_recommended_tracks.data['audio_features']:
-            V.append(track[F])
-
-    data2 = pd.DataFrame.from_dict(variables_to_plot2)
-
-    low_point = []
-    high_point = []
-
-    for VAR in VAR_FEATURE:
-        low_point.append(0)
-        high_point.append(1)
-
-    data_filtered = data2.filter(items=VAR_FEATURE)
-
-
-    df2 = pd.DataFrame([low_point, high_point], columns=VAR_FEATURE)
-    df = data_filtered.append(df2, ignore_index=True)
-
-    # SPLIT THE SONGS IN TWO CONTAINERS
-    nbrs = NearestNeighbors(n_neighbors=10, algorithm='ball_tree').fit(df.as_matrix())
-    distances, indices = nbrs.kneighbors(df.as_matrix())
-
-    low = []
-    for song in indices[100][1:]:
-        try:
-            low.append(song)
-        except:
-            continue
-
-    high = []
-    for song in indices[101][1:]:
-        try:
-            high.append(song)
-        except:
-            continue
-
-    end = []
-    for song in indices[101][6:]:
-        try:
-            end.append(song)
-        except:
-            continue
-
-    temp_list = []
-
-    for rat in peak_end:
-        if rat == 'low':
-            temp_list.append(low[0])
-            del low[0]
-        elif rat == 'peak':
-            temp_list.append(high[0])
-            del high[0]
-        elif rat == 'end':
-            temp_list.append(end[0])
-            del end[0]
-
-    l_dic = {}
-    for VAR in VAR_FEATURE:
-        l_dic[VAR] = []
-
-    for item in temp_list:
-        for VAR in VAR_FEATURE:
-            l_dic[VAR].append(df.iloc[item][VAR])
-
-    for VAR in VAR_FEATURE:
-        l_dic[VAR] = sum(l_dic[VAR]) / len(l_dic[VAR])
-
-    centroid_middle_all_data = []
-
-    for feature, value in l_dic.items():
-        centroid_middle_all_data.append(value)
-
-
-    df3 = pd.DataFrame([centroid_middle_all_data], columns=VAR_FEATURE)
-    df = df.append(df3, ignore_index=True)
-    nbrs = NearestNeighbors(n_neighbors=10, algorithm='ball_tree').fit(df.as_matrix())
-    distances, indices = nbrs.kneighbors(df.as_matrix())
-
-    good_indices = {'cond_1':[], 'cond_2':[]}
-
-    low = []
-    for song in indices[100][1:]:
-        try:
-            low.append(rec_ids[song])
-        except:
-            continue
-
-    high = []
-    for song in indices[101][1:]:
-        try:
-            high.append(rec_ids[song])
-        except:
-            continue
-
-    end = []
-    for song in indices[101][6:]:
-        try:
-            end.append(rec_ids[song])
-        except:
-            continue
-
-    middle = []
-    for song in indices[102][1:]:
-        try:
-            middle.append(rec_ids[song])
-        except:
-            continue
-
-    # MAKE LIST WITH SONGS TO RECOMMEND
-    for rat in peak_end:
-        if rat == 'low':
-            good_indices['cond_1'].append(low[0])
-            del low[0]
-        elif rat == 'peak':
-            good_indices['cond_1'].append(high[0])
-            del high[0]
-        elif rat == 'end':
-            good_indices['cond_1'].append(end[0])
-            del end[0]
-        good_indices['cond_2'].append(middle[0])
-        del middle[0]
-
-    return song_display_dic, good_indices
-
-def create_stats_dic(VAR_FEATURE, good_indices, song_display_dic):
-    stat_dic = {'cond_1':{}, 'cond_2':{}}
-    for condition, stats in stat_dic.items():
-
-        for F in VAR_FEATURE:
-            stats[F] = {'raw': [], 'average': 0, 'peak_end': 0}
-
-        for song in good_indices[condition]:
-            for F in VAR_FEATURE:
-                stats[F]['raw'].append(song_display_dic[song][F])
-
-        for F in VAR_FEATURE:
-            stats[F]['average'] = sum(stats[F]['raw']) / len(stats[F]['raw'])
-            stats[F]['peak_end'] = (max(stats[F]['raw'][:-1]) + stats[F]['raw'][-1]) / 2
-
-    return stat_dic
-
+        plt.savefig('figure_map/user_profile_' + user + '.png', dpi=1000)

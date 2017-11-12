@@ -31,28 +31,56 @@
     }
 
 </style>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+
+<script>
+
+    var interval = 10000;  // 1000 = 1 second, 3000 = 3 seconds
+
+    function doAjax() {
+        $.ajax({
+                type: 'GET',
+                url: '{{ url_for('update_device') }}',
+                data: $(this).serialize(),
+                dataType: 'json',
+                success: function(data){
+                    $('#active_device').html(data['name']);},
+                complete: function () {
+                    setTimeout(doAjax, interval)
+                }
+        });
+    };
+
+    setTimeout(doAjax, interval);
+
+</script>
 
 <div class="container-fluid">
 
 <div class="row">
+
+    <div>Username: {{ gebruiker.name }}</div>
+    <div id="active_device"></div>
+
+</div>
+
+<div class="row">
     <div class="col-lg-3">
-        <h4>We hebben al wat voor jou gekozen, verfijn hieronder je keuze</h4>
+        <h4>We hebben al een nummer voor jou gekozen, verfijn hieronder je keuze</h4>
     </div>
     <div class="col-lg-2">
-        <img src="{{ image }}"  style="max-width: 100%">
+        <img src="{{ song_dic[seed_id]['album']['images'][0]['url'] }}"  style="max-width: 100%">
     </div>
     <div class="col-lg-2">
-                <div class="title_show"><p class="song-title">{{ title }}</p></div>
-                <div class="artist_show"><p class="artist">{{ artist }}</p></div>
+                <div class="title_show"><p class="song-title">{{ song_dic[seed_id]['name'] }}</p></div>
+                <div class="artist_show"><p class="artist">{{ song_dic[seed_id]['artists'][0]['name'] }}</p></div>
 
     </div>
     <div class="col-lg-2">
-                <form action="/recommendations1", method="POST">
-                        <button type="submit" name="selected_song" value="{{ seed_id }}">Select</button>
+                <form action="/calrec", method="POST">
+                    <button type="submit" name="selected_song" value="{{ seed_id }}">Use as seed song, go to experiment</button>
                 </form>
-
     </div>
-
 
 </div>
 
@@ -61,37 +89,30 @@
         {% for hl, ids in alternative.items() %}
             {% if ids is not none %}
                 <div class="row">
-
-                <h4>Something with {{ hl }} {{ feature }}</h4>
-
+                    <h4>Something with {{ hl }} {{ feature }}</h4>
                 </div>
 
             {% endif %}
 
                 <div class="row">
 
-
                 {% for id in ids %}
 
                     <div class="col-lg-2">
                         <div class="container">
-                          <img class="image" src="{{ song_dic[id]['cover'] }}"  style="max-width: 100%" onclick="{% print('clicked') %}">
-                            {% if song_dic[id]['preview'] is not none %}
-                                <div class="overlay">
-                                    <center>
-                                        <audio controls id="aH">
-                                            <source src="{{ song_dic[id]['preview'] }}" type="audio/mpeg">
-                                        </audio>
-                                    </center>
-                                </div>
-                            {%endif %}
+                          <img class="image" src="{{ song_dic[id]['album']['images'][0]['url'] }}">
+                            <div class="col-lg-2">
+                                <audio controls="controls">
+                                    <source src="{{ song_dic[id]['preview_url'] }}" type="audio/mpeg"/>
+                                </audio>
+                             </div>
                         </div>
 
-                        <div class="title_show"><p class="song-title">{{ song_dic[id]['title'] }}</p></div>
-                        <div class="artist_show"><p class="artist">{{ song_dic[id]['artist'] }}</p></div>
+                        <div class="title_show"><p class="song-title">{{ song_dic[id]['name'] }}</p></div>
+                        <div class="artist_show"><p class="artist">{{ song_dic[id]['artists'][0]['name']}}</p></div>
 
                         <form action="/find_alternative_songs", method="POST">
-                            <button type="submit" name="song" value="{{ id }},{{ song_dic[id]['title']}},{{ song_dic[id]['artist'] }}, {{ song_dic[id]['cover'] }}">Select</button>
+                            <button type="submit" name="song" value="{{ id }}">Show recommendations for this song</button>
                         </form>
 
                     </div>

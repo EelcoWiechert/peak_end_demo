@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Playing Song</title>
+</head>
+
+<body>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+
+<script>
+
+    var interval = 10000;  // 1000 = 1 second, 3000 = 3 seconds
+    var next = false;
+    var url;
+
+    function controlPlayer() {
+        $.ajax({
+            type: 'POST',
+            url: '{{ url_for('music_player') }}',
+            dataType:"json",
+            success: function (data) {
+
+                console.log(data)
+
+                if (data['name'] != 'noInfo'){
+
+                    // Which song is played
+                $('#name').html(data['name']);
+
+                // Artist
+                $('#artist').html(data['artist']);
+
+                // Album cover
+                $("#cover").attr('src', data['cover']);
+
+                // Current progress
+                $('#progress').html(data['progress']);
+
+                // Next track
+                next = data['nexttrack']
+                url = data['url']
+
+                }
+                else {console.log('STATUS 202')}
+
+            },
+            complete: function () {
+
+                if (next === 1) {
+                    // go to next question
+                    console.log('going to question page...')
+                    window.location.href = url
+                }
+                else {
+                    // if song is not ready
+                    // pause for a moment
+                    console.log('sleep for a moment, track is playing')
+                    setTimeout(controlPlayer, interval)
+                }
+            }
+        });
+    };
+
+    controlPlayer()
+
+</script>
+
+<div id="name"></div>
+<div id="artist"></div>
+<img id="cover" src="" />
+</body>
+</html>
