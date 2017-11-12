@@ -1,13 +1,7 @@
 from flask import Flask, request, session, g, redirect, url_for, abort, render_template, flash, current_app, jsonify
 from flask_oauthlib.client import OAuth, OAuthException
-from seed_song_determine import *
 from user_definition import *
-import sqlite3
-import sys
 import time
-from create_plot import *
-import pandas as pd
-import random
 
 # VARIABLES
 FEATURES_TO_PLOT = ['valence', 'energy']
@@ -101,6 +95,7 @@ def spotify_authorized():
 
 @app.route('/find_alternative_songs', methods=['GET', 'POST'])
 def find_alternative_songs():
+
     global seed
     global alternative_song_dic
     global gebruiker
@@ -122,7 +117,7 @@ def find_alternative_songs():
     alternative_song_dic = gebruiker.select_alternative_songs(seed, FEATURES_TO_SHOW_ALTERNATIVE_SONGS_ON)
 
     return render_template('user_seed_selection.html', seed_id=seed, alternatives=alternative_song_dic,
-                           song_dic=gebruiker.most_listened_tracks, gebruiker=gebruiker)
+                           song_dic=gebruiker.most_listened_tracks)
 
 
 @app.route('/calrec', methods=['GET', 'POST'])
@@ -144,18 +139,14 @@ def calrec():
 
     return redirect(url_for('play_song', gebruiker=gebruiker))
 
+
 @app.route('/play_song', methods=['GET', 'POST'])
 def play_song():
+    return render_template('playing_song.html')
 
-    # IDENTIFY GLOBAL VARIABLES
-
-    global gebruiker
-
-    return render_template('playing_song.html', gebruiker=gebruiker)
 
 @app.route('/music_player', methods=['GET', 'POST'])
 def music_player():
-
     @spotify.tokengetter
     def get_spotify_oauth_token():
         return session.get('oauth_token')
@@ -171,12 +162,9 @@ def music_player():
 
     # CHECK CURRENTLY PLAYING TRACK
     status_playing = spotify.request('/v1/me/player/currently-playing')
-    print(status_playing.data)
-    print(status_playing.status)
 
     # NO SONG IS LOADED (204)
     if status_playing.status == 204:
-
         # NO SONG IS PLAYING, PLAY SONG
 
         id_to_listen = gebruiker.recommendations_to_user['condition_' + str(str(gebruiker.condition))][
@@ -223,6 +211,7 @@ def music_player():
                     gebruiker.current_song += 1
 
                     if gebruiker.current_song == 5:
+                        gebruiker.current_song = 0
                         if gebruiker.first_list != gebruiker.current_list:
                             return 'experiment done'
 
@@ -237,10 +226,15 @@ def music_player():
                         else:
                             return ' error in current list'
 
+                    print('Next list: %s, Next song: %s' % (str(gebruiker.current_list), str(gebruiker.current_song)))
+
                     nexttrack = 1
 
-            # IF THE SONG IS PAUSED
+            # IF THE SONG IS PAUSED, START OF THE EXPERIMENT
             else:
+
+                print(print('I will play: Next list: %s, Next song: %s' % (
+                str(gebruiker.current_list), str(gebruiker.current_song))))
 
                 id_to_listen = gebruiker.recommendations_to_user['condition_' + str(str(gebruiker.condition))][
                     'list_' + str(gebruiker.current_list)][gebruiker.current_song]
@@ -266,10 +260,7 @@ def music_player():
     # COULD NOT GET INTO (202)
 
     if status_playing.status == 202:
-
         time.sleep(5)
-
-    print(url_for('question'))
 
     return jsonify({'name': name,
                     'artist': artist,
@@ -291,20 +282,23 @@ def update_device():
     def get_spotify_oauth_token():
         return session.get('oauth_token')
 
+    data = {'device': 'noDevice', 'name': 'noDevice', 'type': 'noDevice'}
+
     devices = spotify.request('/v1/me/player/devices')
 
     if devices.status == 202:
         time.sleep(5)
-        return jsonify({'device': 'noDevice', 'name': 'noDevice', 'type': 'noDevice'})
 
-    elif devices.status == 200 and devices.data['devices']:
-        print('devices not empty')
+    elif devices.status == 200:
+        print(devices.status)
+        print(devices.data['devices'])
         active_device = list(filter(lambda x: x['is_active'] == True, devices.data['devices']))
-        print(active_device)
-        return jsonify(
-            {'device': active_device[0]['id'], 'name': active_device[0]['name'], 'type': active_device[0]['type']})
-    else:
-        return jsonify({'device': 'noDevice', 'name': 'noDevice', 'type': 'noDevice'})
+        if active_device:
+            print(active_device)
+            data = {'device': active_device[0]['id'], 'name': active_device[0]['name'],
+                    'type': active_device[0]['type']}
+
+    return jsonify(data)
 
 
 if __name__ == '__main__':

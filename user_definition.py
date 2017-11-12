@@ -3,6 +3,7 @@ from flask_oauthlib.client import OAuth, OAuthException
 import matplotlib.pyplot as plt
 import pandas as pd
 import random
+import datetime
 import numpy as np
 import json
 from sklearn.neighbors import NearestNeighbors
@@ -414,7 +415,7 @@ class User(object):
         ax4.plot(x, self.feature_values['condition_2']['list_2'])
         ax5.plot(x, self.feature_values['condition_3']['list_1'])
         ax6.plot(x, self.feature_values['condition_3']['list_2'])
-        plt.savefig('test.pdf')
+        plt.savefig('Peak-End_plot of ' + str(self.name) + '.pdf')
 
 
 class Analytics(object):
