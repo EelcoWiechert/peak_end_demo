@@ -1,0 +1,25 @@
+[
+  { "id" : 0,
+    "question" : "How would you rate the valence of the song?",
+    "radioLow" : "Negative",
+    "radioHigh": "Positive",
+    "noise" : 0,
+    "status" : "OK"
+  },
+  {
+    "id" : 1,
+    "question" : "How would you rate the energy of the song?",
+    "radioLow" : "Low",
+    "radioHigh": "High",
+    "noise" : 0,
+    "status" : "OK"
+  },
+  {
+    "id" : 2,
+    "question" : "Did it rain on February 19, 2017?",
+    "radioLow" : "Probably not",
+    "radioHigh": "I'm pretty sure",
+    "noise" : 1,
+    "status" : "OK"
+  }
+]

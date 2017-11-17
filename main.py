@@ -2,12 +2,14 @@ from flask import Flask, request, session, g, redirect, url_for, abort, render_t
 from flask_oauthlib.client import OAuth, OAuthException
 from user_definition import *
 import time
+import pickle
+from random import randint
 
 # VARIABLES
 FEATURES_TO_PLOT = ['valence', 'energy']
 FEATURES = ['valence', 'energy', 'danceability', "acousticness", "instrumentalness"]
 FEATURES_TO_SHOW_ALTERNATIVE_SONGS_ON = ['valence', 'energy', 'danceability', 'acousticness', 'instrumentalness']
-NUMBER_OF_TOP_TRACKS_TO_COLLECT = 100  # per 100
+NUMBER_OF_TOP_TRACKS_TO_COLLECT = 400  # per 100
 
 app = Flask(__name__)
 app.debug = True
@@ -71,10 +73,16 @@ def spotify_authorized():
         return 'Access denied: {0}'.format(resp.message)
     session['oauth_token'] = (resp['access_token'], '')
 
+    # PAUSE PLAYER IF SONG IS PLAYING
+    url = "https://api.spotify.com/v1/me/player/pause"
+    spotify.put(url=url, format='json')
+
     # DEFINE THE USER
 
     me = spotify.request('/v1/me')  # LOAD USER PROFILE
     gebruiker = User(me)  # Initialize user
+
+    gebruiker.load_questions()
 
     # COLLECT THE MOST LISTENED TRACKS OF THE USER
     # THE FEATURES VARIABLE INDICATES WHICH FEATURE VALUE OF THE SONGS NEED TO BE ADDED TO THE DICTONARY
@@ -88,7 +96,7 @@ def spotify_authorized():
 
     song_display_dic = gebruiker.most_listened_tracks
 
-    gebruiker.get_devices()
+    # gebruiker.get_devices()
 
     return redirect(url_for('find_alternative_songs', seed=gebruiker.seed_song['id']))
 
@@ -159,6 +167,7 @@ def music_player():
     progress = 'noProgress'
     timeout = 10000
     nexttrack = 0
+    hold = 0
 
     # CHECK CURRENTLY PLAYING TRACK
     status_playing = spotify.request('/v1/me/player/currently-playing')
@@ -167,7 +176,7 @@ def music_player():
     if status_playing.status == 204:
         # NO SONG IS PLAYING, PLAY SONG
 
-        id_to_listen = gebruiker.recommendations_to_user['condition_' + str(str(gebruiker.condition))][
+        id_to_listen = gebruiker.recommendations_to_user['condition_' + str(gebruiker.condition)][
             'list_' + str(gebruiker.current_list)][gebruiker.current_song]
 
         payload = {"uris": ["spotify:track:" + id_to_listen]}
@@ -175,13 +184,12 @@ def music_player():
 
         spotify.put(url=url, data=payload, format='json')
 
-        time.sleep(1)
-
         status_playing = spotify.request('/v1/me/player/currently-playing')
 
         name = status_playing.data['item']['name']
         artist = status_playing.data['item']['artists'][0]['name']
         cover = status_playing.data['item']['album']['images'][1]['url']
+        nexttrack = 0
 
     # SONG IS LOADED, AND PLAYING (200)
     if status_playing.status == 200:
@@ -207,9 +215,11 @@ def music_player():
                     url = "https://api.spotify.com/v1/me/player/pause"
                     spotify.put(url=url, format='json')
 
-                    # UPDATE PARAMETERS
+                    # AT END OF SONG
                     gebruiker.current_song += 1
+                    gebruiker.load_questions()
 
+                    # AT END OF LIST
                     if gebruiker.current_song == 5:
                         gebruiker.current_song = 0
                         if gebruiker.first_list != gebruiker.current_list:
@@ -226,17 +236,11 @@ def music_player():
                         else:
                             return ' error in current list'
 
-                    print('Next list: %s, Next song: %s' % (str(gebruiker.current_list), str(gebruiker.current_song)))
-
                     nexttrack = 1
 
             # IF THE SONG IS PAUSED, START OF THE EXPERIMENT
             else:
-
-                print(print('I will play: Next list: %s, Next song: %s' % (
-                str(gebruiker.current_list), str(gebruiker.current_song))))
-
-                id_to_listen = gebruiker.recommendations_to_user['condition_' + str(str(gebruiker.condition))][
+                id_to_listen = gebruiker.recommendations_to_user['condition_' + str(gebruiker.condition)][
                     'list_' + str(gebruiker.current_list)][gebruiker.current_song]
 
                 payload = {"uris": ["spotify:track:" + id_to_listen]}
@@ -244,20 +248,12 @@ def music_player():
 
                 spotify.put(url=url, data=payload, format='json')
 
-                time.sleep(1)
-
                 status_playing = spotify.request('/v1/me/player/currently-playing')
 
                 name = status_playing.data['item']['name']
                 artist = status_playing.data['item']['artists'][0]['name']
                 cover = status_playing.data['item']['album']['images'][1]['url']
                 nexttrack = 0
-
-    # SONG IS LOADED, AND PAUSED (200)
-
-    # NO DEVICES AVAILABLE (200)
-
-    # COULD NOT GET INTO (202)
 
     if status_playing.status == 202:
         time.sleep(5)
@@ -268,16 +264,12 @@ def music_player():
                     'progress': progress,
                     'timeout': timeout,
                     'nexttrack': nexttrack,
-                    'url': url_for('question')})
-
-
-@app.route('/question', methods=['GET', 'POST'])
-def question():
-    return render_template('question.html', gebruiker=gebruiker)
+                    'hold': hold})
 
 
 @app.route('/update_device', methods=['GET', 'POST'])
 def update_device():
+
     @spotify.tokengetter
     def get_spotify_oauth_token():
         return session.get('oauth_token')
@@ -290,15 +282,77 @@ def update_device():
         time.sleep(5)
 
     elif devices.status == 200:
-        print(devices.status)
-        print(devices.data['devices'])
         active_device = list(filter(lambda x: x['is_active'] == True, devices.data['devices']))
+
+        # Check if there is a device currently playing
         if active_device:
-            print(active_device)
+            data = {'device': active_device[0]['id'], 'name': active_device[0]['name'],
+                    'type': active_device[0]['type']}
+
+        # if there is no device currently playing, but there is another device available, select it
+        elif len(list(devices.data['devices'])) == 1:
+            active_device = list(devices.data['devices'])
             data = {'device': active_device[0]['id'], 'name': active_device[0]['name'],
                     'type': active_device[0]['type']}
 
     return jsonify(data)
+
+@app.route('/question', methods=['GET', 'POST'])
+def question():
+
+    if request.method == 'GET':
+
+        # WHEN THERE ARE QUESTIONS LEFT
+        if gebruiker.questions:
+
+            # SELECT A QUESTION
+            question = random.choice(gebruiker.questions)
+
+            # REMOVE IT FROM THE LIST
+            gebruiker.questions.remove(question)
+
+            return jsonify(question)
+
+        else:
+
+            return jsonify({'status' : 'empty'})
+
+    if request.method == 'POST':
+
+        # GET THE CURRENT SONG PROGRESS
+        status_playing = spotify.request('/v1/me/player/currently-playing')
+
+        if status_playing.status == 200 and status_playing.data:
+            progress = status_playing.data['progress_ms']
+        else:
+            progress = 'noData'
+
+
+        # ASSIGN THE VALUES
+        answer = request.json['answer']
+        question = request.json['question']
+        list = gebruiker.current_list
+        song = gebruiker.current_song
+
+        # TRY TO OPEN AN EXISTING FILE
+
+        try:
+            with open(str(gebruiker.name) + '_answers.txt', 'rb') as fp:
+                itemlist = pickle.load(fp)
+
+        # IF NO EXISTING FILE IS AVAILABLE, CREATE AN EMPTY LIST
+        except:
+            itemlist = []
+
+        itemlist.append({'answer' : answer, 'question' : question, 'list' : list, 'song': song, 'progress':progress})
+
+        print(itemlist)
+
+        # DUMP THE DATA IN THE FILE
+        with open(str(gebruiker.name) + '_answers.txt', 'wb') as fp:
+            pickle.dump(itemlist, fp)
+
+        return 'OK'
 
 
 if __name__ == '__main__':

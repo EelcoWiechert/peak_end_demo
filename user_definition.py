@@ -159,6 +159,17 @@ class User(object):
 
     '''
     
+    Load the questions for the user
+    
+    '''
+
+    def load_questions(self):
+
+        self.questions = json.load(open('questions.json'))
+
+
+    '''
+    
     Choose the seed song random from the users' top tracks
     
     '''
