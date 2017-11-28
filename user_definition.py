@@ -3,6 +3,7 @@ from flask_oauthlib.client import OAuth, OAuthException
 import matplotlib.pyplot as plt
 import pandas as pd
 import random
+import pickle
 import datetime
 import numpy as np
 import json
@@ -32,8 +33,8 @@ spotify = oauth.remote_app(
     authorize_url='https://accounts.spotify.com/authorize'
 )
 
-def center_point(points):
 
+def center_point(points):
     if len(points[0]) > 0:
         x = [p[0] for p in points]
     if len(points[0]) > 1:
@@ -49,6 +50,7 @@ def center_point(points):
         centroid_middle_all_data = [sum(x) / len(x), sum(y) / len(y), sum(z) / len(z)]
 
     return centroid_middle_all_data
+
 
 class User(object):
 
@@ -80,32 +82,29 @@ class User(object):
         # Intitialize other information
         self.most_listened_tracks = []
         self.seed_song = dict()
-        self.condition = random.choice([1,2,3])
-        self.first_list = random.choice([1,2])
+        # self.condition = random.choice([1,2,3])
+        self.condition = 3
+        # self.first_list = random.choice([1,2])
+        self.first_list = 1
         self.current_list = 0
         self.current_song = 0
         self.devices = dict()
-        self.active_device = ''
+        self.active_device = {"id": "noDevice",
+                              "is_active": "noDevice",
+                              "is_restricted": "noDevice",
+                              "name": "noDevice",
+                              "type": "noDevice",
+                              "volume_percent": "noDevice"
+                              }
         self.recommendations = []
+        self.done = False
+        self.no_more_questions = True
 
+        itemlist = []
 
-    def get_devices(self):
-
-        @spotify.tokengetter
-        def get_spotify_oauth_token():
-            return session.get('oauth_token')
-
-        devices = spotify.request('/v1/me/player/devices')
-
-        try:
-            self.devices = {x["id"]: x for x in devices.data['devices']}
-
-            for device in devices.data['devices']:
-                if device['is_active']:
-                    self.active_device = device['id']
-
-        except:
-            print('User: %s does currently have no devices' % (str(self.name)))
+        # DUMP THE DATA IN THE FILE
+        with open(str(self.name) + '_answers.txt', 'wb') as fp:
+            pickle.dump(itemlist, fp)
 
     def get_top_tracks(self, features, NUMBER_OF_TOP_TRACKS_TO_COLLECT):
 
@@ -166,7 +165,6 @@ class User(object):
     def load_questions(self):
 
         self.questions = json.load(open('questions.json'))
-
 
     '''
     
@@ -249,7 +247,7 @@ class User(object):
 
         for track in features_recommended_tracks.data['audio_features']:
             for F in features:
-                # Try to add the features to the dictonary. If this gives an error, the song is not in the dictionary
+                # Try to add the features to the dictionary. If this gives an error, the song is not in the dictionary
                 self.recommendations[track['id']][F] = track[F]
 
         # CREATE AN ARRAY THAT CONTAINS THE FEATURE VALUES
@@ -284,7 +282,6 @@ class User(object):
 
         nbrs = NearestNeighbors(n_neighbors=15, algorithm='ball_tree').fit(array)
         distances, indices = nbrs.kneighbors(array)
-
 
         low = []
         for song in indices[100][1:]:
@@ -327,7 +324,6 @@ class User(object):
                 average.append(list(self.recommendations.keys())[song])
             except:
                 continue
-
 
         self.recommendations_to_user = {'condition_1': {'list_1': [], 'list_2': []},
                                         'condition_2': {'list_1': [], 'list_2': []},
@@ -409,17 +405,22 @@ class User(object):
                     self.feature_values[condition][l].append(self.recommendations[identifier][features[0]])
 
         # row and column sharing
-        x = [1,2,3,4,5]
+        x = [1, 2, 3, 4, 5]
         f, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2)
+
         # SET TITLE
+        axis_font = {'fontname': 'Arial', 'size': '14'}
+
         ax1.set_title('List 1')
         ax2.set_title('List 2')
+
         ax1.set_ylim([0, 1])
         ax2.set_ylim([0, 1])
         ax3.set_ylim([0, 1])
         ax4.set_ylim([0, 1])
         ax5.set_ylim([0, 1])
         ax6.set_ylim([0, 1])
+
         ax1.plot(x, self.feature_values['condition_1']['list_1'])
         ax2.plot(x, self.feature_values['condition_1']['list_2'])
         ax3.plot(x, self.feature_values['condition_2']['list_1'])
@@ -432,7 +433,8 @@ class User(object):
 class Analytics(object):
 
     def __init__(self):
-        self.features_of_interest = ['valence','energy', 'danceability', "speechiness", "acousticness", "instrumentalness", "liveness"]
+        self.features_of_interest = ['valence', 'energy', 'danceability', "speechiness", "acousticness",
+                                     "instrumentalness", "liveness"]
 
     def user_characteristics_plot(self, user, song_display_dic):
 

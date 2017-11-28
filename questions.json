@@ -1,6 +1,6 @@
 [
   { "id" : 0,
-    "question" : "How would you rate the valence of the song?",
+    "question" : "How would positive is this song?",
     "radioLow" : "Negative",
     "radioHigh": "Positive",
     "noise" : 0,
@@ -16,9 +16,9 @@
   },
   {
     "id" : 2,
-    "question" : "Did it rain on February 19, 2017?",
-    "radioLow" : "Probably not",
-    "radioHigh": "I'm pretty sure",
+    "question" : "How danceable is this song?",
+    "radioLow" : "Not danceable",
+    "radioHigh": "Very danceable",
     "noise" : 1,
     "status" : "OK"
   }
