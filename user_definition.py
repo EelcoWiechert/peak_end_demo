@@ -99,6 +99,7 @@ class User(object):
         self.recommendations = []
         self.done = False
         self.no_more_questions = True
+        self.top_tracks = None
 
         itemlist = []
 
@@ -133,6 +134,9 @@ class User(object):
 
         list_of_ID = list(self.most_listened_tracks.keys())
 
+        #with open(str(self.name) + '_toptracks.txt', 'w') as fp:
+            #fp.write(list_of_ID)
+
         # Get audio features
 
         while len(list_of_ID) > 0:
@@ -146,6 +150,11 @@ class User(object):
             link = track_ids_string[:-1]
             features_recommended_tracks = spotify.request('/v1/audio-features/?ids=' + str(link))
 
+            if self.top_tracks:
+                self.top_tracks.append(pd.DataFrame(features_recommended_tracks.data['audio_features']))
+            else:
+                self.top_tracks = pd.DataFrame(features_recommended_tracks.data['audio_features'])
+
             for track in features_recommended_tracks.data['audio_features']:
                 for F in features:
                     # Try to add the features to the dictonary. If this gives an error, the song is not in the dictionary
@@ -155,6 +164,16 @@ class User(object):
                         continue
 
             list_of_ID = list_of_ID[100:]
+
+            remove = self.top_tracks.nsmallest(40, 'energy')
+            remove.append(self.top_tracks.nlargest(40, 'energy'))
+
+            for track in list(remove.index):
+                remove.drop([track])
+
+            self.top_tracks = remove.sample(n=5)
+
+            print(self.top_tracks)
 
     '''
     
@@ -249,6 +268,10 @@ class User(object):
             for F in features:
                 # Try to add the features to the dictionary. If this gives an error, the song is not in the dictionary
                 self.recommendations[track['id']][F] = track[F]
+
+        self.df_features = pd.DataFrame(features_recommended_tracks.data['audio_features'])
+        self.df_features.set_index('id', inplace=True)
+        print(self.df_features.head())
 
         # CREATE AN ARRAY THAT CONTAINS THE FEATURE VALUES
         array = []

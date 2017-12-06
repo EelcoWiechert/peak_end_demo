@@ -12,6 +12,7 @@
     var question;
     var noMoreQuestion;
     var questionsActive = false;
+    var id;
 
     function controlPlayer() {
 
@@ -31,7 +32,8 @@
 
                 // When a track is played
                 else if (data['name'] != 'noName'){
-                    // Next track
+                    id = data['id']
+                    console.log(id)
                     progress = data['progress'];
                     noMoreQuestion = data['nexttrack'];
                 }
@@ -134,7 +136,7 @@ function read_answers() {
                 dataType: "json",
                 contentType: "application/json",
                 data: JSON.stringify({ answer:radios[i].value,
-                                       question:question})
+                                       question:question, id:id})
               });
 
               // only one radio can be logically checked, don't check the rest

@@ -1,0 +1,123 @@
+{% extends 'layout.html' %}
+
+{% block body %}
+<style>
+    .container {
+      position: relative;
+      width: 100%;
+    }
+
+    .image {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+</style>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+
+<script>
+
+    var interval = 3000;  // 1000 = 1 second, 3000 = 3 seconds
+
+    function checkDevices() {
+        $.ajax({
+                type: 'GET',
+                url: '{{ url_for('update_device') }}',
+                data: $(this).serialize(),
+                dataType: 'json',
+                success: function(data){
+                    $('#active_device').html(data['name']);
+
+                    console.log(data['name'])
+
+                    if (data['name'] === 'noDevice'){
+                        $("#divEle").show();
+                        $("#goToExperimentBut").prop('disabled', true);
+                    }
+                    else {
+                        $("#divEle").hide();
+                        $("#goToExperimentBut").prop('disabled', false);
+                    }
+
+                    },
+                complete: function () {
+                    setTimeout(checkDevices, interval)
+                }
+        });
+    };
+
+    checkDevices();
+
+</script>
+
+<div class="container-fluid">
+
+<div class="row">
+
+    <div id="divEle" class="alert alert-warning col-lg-12">
+      <strong>Warning!</strong> You currently have no active devices
+    </div>
+</div>
+
+<!--<div id="active_device"></div>-->
+
+<style>
+
+    body {
+  font-family: sans-serif;
+  background: #42426b;
+  background-image: -webkit-linear-gradient(135deg, #8077b7, #97caec);
+  background-image: linear-gradient(-45deg, #8077b7, #97caec);
+  color: rgba(255,255,255,.5);
+}
+
+</style>
+
+<div class="back">
+        <div class="row justify-content-md-center">
+
+        {% for id in seed %}
+
+            <div class="col-lg-2">
+                <div class="container">
+                  <img class="image" src="{{ song_dic[id]['album']['images'][1]['url'] }}">
+                    <div class="col-lg-2">
+                        <center>
+                            <audio controls="controls">
+                                <source src="{{ song_dic[id]['preview_url'] }}" type="audio/mpeg"/>
+                            </audio>
+                        </center>
+                     </div>
+                </div>
+
+                <div class="title_show"><p class="song-title">{{ song_dic[id]['name'] }}</p></div>
+                <div class="artist_show"><p class="artist">{{ song_dic[id]['artists'][0]['name']}}</p></div>
+
+            <div>
+                <center>
+                    <form action="/calrec", method="POST">
+                        <button id="goToExperimentBut" type="submit" name="selected_song" value="{{ song_dic[id]['id'] }}">Select</button>
+                    </form>
+                </center>
+            </div>
+
+
+            </div>
+
+
+
+        {% endfor %}
+
+        </div>
+
+
+
+
+
+</div>
+
+</div>
+
+{% endblock %}

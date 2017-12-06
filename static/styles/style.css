@@ -1,10 +1,11 @@
 
 p.song-title {
-    font-size: 3mm;
+    font-size: 4mm;
+    color: white;
 }
 
 p.artist {
-    color: grey;
+    color: #f4f4f9;
     font-size: 3mm;
 }
 

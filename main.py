@@ -96,7 +96,8 @@ def spotify_authorized():
 
     song_display_dic = gebruiker.most_listened_tracks
 
-    return redirect(url_for('find_alternative_songs', seed=gebruiker.seed_song['id']))
+    return render_template('select_seed.html', seed=list(gebruiker.top_tracks['id']), song_dic=gebruiker.most_listened_tracks)
+    #return redirect(url_for('find_alternative_songs', seed=gebruiker.seed_song['id']))
 
 
 @app.route('/find_alternative_songs', methods=['GET', 'POST'])
@@ -162,15 +163,15 @@ def music_player():
 
     global gebruiker
     global status
+    global id
 
+    id = 'noName'
     name = 'noName'
     artist = 'noArtist'
     cover = 'noCover'
     progress = 'noProgress'
     timeout = 10000
-    nexttrack = 0
     hold = 0
-
 
     print('status')
     print(status)
@@ -198,6 +199,7 @@ def music_player():
         url = "https://api.spotify.com/v1/me/player/play?device_id=" + str(gebruiker.active_device['id'])
 
         spotify.put(url=url, data=payload, format='json')
+        id = id_to_listen
         gebruiker.no_more_questions = False
         gebruiker.load_questions()  # RELOAD QUESTIONS
 
@@ -219,6 +221,7 @@ def music_player():
 
             print('Currently playing song %s of 5 [List %s]' % (str(gebruiker.current_song + 1),str(gebruiker.current_list)))
 
+            id = status_playing.data['item']['id']
             name = status_playing.data['item']['name']
             artist = status_playing.data['item']['artists'][0]['name']
             cover = status_playing.data['item']['album']['images'][1]['url']
@@ -272,10 +275,10 @@ def music_player():
 
                 status_playing = spotify.request('/v1/me/player/currently-playing')
 
+                id = status_playing.data['item']['id']
                 name = status_playing.data['item']['name']
                 artist = status_playing.data['item']['artists'][0]['name']
                 cover = status_playing.data['item']['album']['images'][1]['url']
-                nexttrack = 0
 
                 print('')
                 print('-------------------------------------------------------------')
@@ -313,7 +316,8 @@ def music_player():
 
         time.sleep(5)
 
-    return jsonify({'name': name,
+    return jsonify({'id': id,
+                    'name': name,
                     'artist': artist,
                     'cover': cover,
                     'progress': progress,
@@ -403,6 +407,7 @@ def question():
         # ASSIGN THE VALUES
         answer = request.json['answer']
         question = request.json['question']
+        trackid = request.json['id']
         list = gebruiker.current_list
         song = gebruiker.current_song
 
@@ -438,9 +443,7 @@ def question():
             print('----------------------------------')
             print('')
 
-        itemlist.append({'answer' : answer, 'question' : question, 'list' : list, 'song': song, 'progress':progress})
-
-
+        itemlist.append({'answer' : answer, 'question' : question, 'list' : list, 'song': song, 'progress':progress, 'trackid':trackid})
 
         print('')
         print('----------------------------------')
@@ -468,7 +471,7 @@ def review_list():
     return render_template('question.html')
 
 
-@app.route('/router', methods=['GET, POST'])
+@app.route('/router', methods=['GET', 'POST'])
 def router():
 
     global status
