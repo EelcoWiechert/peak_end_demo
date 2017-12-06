@@ -1,9 +1,12 @@
 [
   { "id" : 0,
-    "question" : "How would positive is this song?",
+    "question" : "How would you rate the valence (i.e. the positivity / negativity) of the song?",
     "radioLow" : "Negative",
     "radioHigh": "Positive",
+    "middle": "Neutral",
+    "answers": [1,2,3,4,5,6,7],
     "noise" : 0,
+    "type": "rate",
     "status" : "OK"
   },
   {
@@ -11,7 +14,10 @@
     "question" : "How would you rate the energy of the song?",
     "radioLow" : "Low",
     "radioHigh": "High",
+    "middle": "Neutral",
+    "answers": [1,2,3,4,5,6,7],
     "noise" : 0,
+    "type": "rate",
     "status" : "OK"
   },
   {
@@ -19,7 +25,43 @@
     "question" : "How danceable is this song?",
     "radioLow" : "Not danceable",
     "radioHigh": "Very danceable",
+    "middle": "Neutral",
+    "answers": [1,2,3,4,5,6,7],
     "noise" : 1,
+    "type": "rate",
+    "status" : "OK"
+  },
+  {
+    "id" : 3,
+    "question" : "Did you listen to this song before?",
+    "radioLow" : "Yes",
+    "radioHigh": "No",
+    "answers": [0,1],
+    "middle": "",
+    "noise" : 1,
+    "type": "yesno",
+    "status" : "OK"
+  },
+  {
+    "id" : 4,
+    "question" : "How would you rate this song?",
+    "radioLow" : "1 Star",
+    "radioHigh": "5 Stars",
+    "answers": [1,2,3,4,5],
+    "middle": "",
+    "noise" : 1,
+    "type": "stars",
+    "status" : "OK"
+  },
+  {
+    "id" : 5,
+    "question" : "If you would not consider your own musical preferences, how would you rate this song?",
+    "radioLow" : "1 Star",
+    "radioHigh": "5 Stars",
+    "middle": "",
+    "answers": [1,2,3,4,5],
+    "noise" : 1,
+    "type": "stars",
     "status" : "OK"
   }
 ]

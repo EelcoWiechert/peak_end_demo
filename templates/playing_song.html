@@ -1,48 +1,6 @@
-<!DOCTYPE html>
+{% extends 'layout.html' %}
 
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Playing Song</title>
-
-    <style>
-
-        .ui-dialog-titlebar-close {
-            visibility: hidden;
-        }
-
-    #questionDiv {
-        border: 1px solid black;
-        overflow: auto;
-    }
-
-    #dialog-question{
-        border: 1px solid black;
-    }
-
-    #low {
-        float:left;
-        border: 1px solid black;
-    }
-
-    #buttons {
-        border: 1px solid black;
-        float: left;
-    }
-
-    #high {
-        float:left;
-        border: 1px solid black;
-    }
-
-     input[type="radio"]{
-      margin: 0 10px 0 10px;
-    }
-    </style>
-
-</head>
-
-<body>
+{% block body %}
 
 <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
 <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
@@ -50,64 +8,55 @@
 <script>
 
     var interval = 3000;  // 1000 = 1 second, 3000 = 3 seconds
-    var next = false;
-    var url;
+    var progress;
     var question;
+    var noMoreQuestion;
     var questionsActive = false;
 
     function controlPlayer() {
+
+        // Request the current status of the player with a GET request
         $.ajax({
             type: 'GET',
             url: '{{ url_for('music_player') }}',
             dataType:"json",
             success: function (data) {
 
-                console.log(data)
+                // IF THE LIST IS AT THE END, REVIEW LIST
+                if ((data['stage'] === 'evaluateList1') || (data['stage'] === 'evaluateList2')) {
 
-                if (data['name'] != 'noInfo'){
-
-                    // Which song is played
-                $('#name').html(data['name']);
-
-                // Artist
-                $('#artist').html(data['artist']);
-
-                // Album cover
-                $("#cover").attr('src', data['cover']);
-
-                // Current progress
-                $('#progress').html(data['progress']);
-
-                // Next track
-                next = data['nexttrack']
-                url = data['url']
-
+                    // Go the the review list
+                    window.location.href = "{{ url_for( "review_list" ) }}";
                 }
-                else {console.log('STATUS 202')}
+
+                // When a track is played
+                else if (data['name'] != 'noName'){
+                    // Next track
+                    progress = data['progress'];
+                    noMoreQuestion = data['nexttrack'];
+                }
+
+                // In case no track is loaded
+                else {console.log('No track loaded')}
 
             },
             complete: function () {
 
-                if (next === 1) {
-                    // go to next question
-                    console.log('Next track')
-                    setTimeout(controlPlayer, 1000)
-                }
-                else {
-                    // if song is not ready
-                    // pause for a moment
-                    console.log('sleep for a moment, track is playing')
-                    setTimeout(controlPlayer, interval)
+                // When there is no question is currently asked and there are questions left...
+                // Ask the question
+                if ((questionsActive === false) && (noMoreQuestion !== true)) {
 
-                    if (questionsActive === false) {
-                        console.log('Activate questions')
-                        openQuestion()
-                    }
+                        // Notify the system that the next question might be asked
+                        openQuestion();
                 }
+
+                // Set the next time we should check the progress of the player
+                setTimeout(controlPlayer, interval)
             }
         });
-    };
+    }
 
+    // Function that askes questions while playing songs
     function openQuestion() {
         $.ajax({
             type: 'GET',
@@ -115,117 +64,113 @@
             dataType:"json",
             success: function (data) {
 
-                questionsActive = true;
+                // When the system returns a question
+                if ((data['status'] === 'OK') && (questionsActive === false)) {
 
-                if (data['status'] === 'OK') {
+                    // Notify the system that a question is asked
+                    questionsActive = true;
+                    question = data['question']
 
-                    console.log('Question')
+                    // Function used to show the question
+                    function showQuestion() {
 
-                     question = data['question']
+                        // Load the data in the HTML containers
+                        document.getElementById("questionDialog").innerHTML = data['question'];
+                        document.getElementById("lowDialog").innerHTML = data['radioLow'];
+                        document.getElementById("highDialog").innerHTML = data['radioHigh'];
+                        document.getElementById("neutralPoint").innerHTML = data['middle'];
 
-                    $("#question").html(question);
-                    $("#low").html(data['radioLow']);
-                    $("#high").html(data['radioHigh']);
+                        // Load the answer posibilities
+                        var answers = '';
+                        for (i = 0; i < data['answers'].length; i++) {
+                            answers = answers.concat('<input type="radio" name="answerR" value="' + data['answers'][i] + '" />')
+                        }
+                        document.getElementById("answers").innerHTML = answers;
 
-                    // Show question
-                    $("#dialog-question").dialog('open');
+                        // Show the question
+                        questionContainer.style.visibility = 'visible';
+                    }
+
+                    // When the question should be shown to the user
+                    // If this function is not delayed, the questions pop up quickly after each other
+                    var random_wait_time = Math.floor((Math.random() * 3000) + 1000);
+                    setTimeout(showQuestion, random_wait_time);
 
                 }
+
+                // When the system does not return a question.
+                // I.e., all questions are asked or a question is currently active
                 else {
-                    console.log('no more questions');
-                    questionsActive = false;
+                    console.log('no more questions, or question is active');
                 }
-
-
-
             }
         });
     }
 
-
-  $( function() {
-      $("#dialog-question").dialog({
-          resizable: false,
-          height: "auto",
-          width: 400,
-          modal: true,
-          autoOpen: false,
-          buttons: {
-              Submit: function () {
-
-                  // Close the alert box
-                  $(this).dialog("close");
-
-                  setTimeout(openQuestion, 5000)
-
-                  // Load the values of the
-                  var radios = document.getElementsByName('answerS');
-
-                  for (var i = 0, length = radios.length; i < length; i++) {
-                      if (radios[i].checked) {
-
-                          // do whatever you want with the checked radio
-                          console.log(radios[i].value);
-
-                          $.ajax({
-                            type: 'POST',
-                            url: '{{ url_for('question') }}',
-                            dataType: "json",
-                            contentType: "application/json",
-                            data: JSON.stringify({ answer:radios[i].value,
-                                                   question:question})
-                          });
-
-                          // only one radio can be logically checked, don't check the rest
-                          break;
-                      }
-                  }
-              }
-          }
-      });
-  });
-
-    controlPlayer();
-
-    setTimeout(openQuestion, 5000);
-
-
+// Initial load of the control player
+setTimeout(controlPlayer,1000);
 
 </script>
 
-<div id="name"></div>
-<div id="artist"></div>
-<img id="cover" src="" />
+<script>
 
+function read_answers() {
 
-    <div id="dialog-question" title="">
+    // Hide the question
+    questionContainer.style.visibility = 'hidden';
 
-        <p id="question"></p>
+    // Notify the system that there is no question active
+    questionsActive = false;
 
-        <div id="questionDiv">
+    // Load the values of the
+      var radios = document.getElementsByName('answerR');
 
-            <div id="low"></div>
-            <div id="buttons">
-                 <form action="">
-                    <input type="radio" name="answerS" value="-3">
-                    <input type="radio" name="answerS" value="-2">
-                    <input type="radio" name="answerS" value="-1">
-                    <input type="radio" name="answerS" value="0">
-                    <input type="radio" name="answerS" value="1">
-                    <input type="radio" name="answerS" value="2">
-                    <input type="radio" name="answerS" value="3">
-                </form>
+      for (var i = 0, length = radios.length; i < length; i++) {
+          if (radios[i].checked) {
+
+              $.ajax({
+                type: 'POST',
+                url: '{{ url_for('question') }}',
+                dataType: "json",
+                contentType: "application/json",
+                data: JSON.stringify({ answer:radios[i].value,
+                                       question:question})
+              });
+
+              // only one radio can be logically checked, don't check the rest
+              break;
+          }
+      }
+}
+
+</script>
+<div class="back">
+    <div id="questionContainer" class="container questionBox" style="visibility: hidden;">
+
+        <div id="innerQuestionContainer" class="container rb-box">
+            <!-- The Question -->
+            <div class="row justify-content-md-center" style="height: 100px;">
+                <br>
+                <div id="questionDialog" class="col col-lg-12 questionText"></div>
             </div>
-            <div id="high"></div>
 
+            <!-- Set neutral point -->
+            <div class="row justify-content-md-center">
+                <div id="neutralPoint" class="col col-lg-1 answerText"></div>
+            </div>
 
+            <!-- The Answers -->
+            <div class="row justify-content-md-center" style="height: 100px;">
+                <div id="lowDialog" class="col col-lg-2 answerText"></div>
+                <form id="answers"></form>
+                <div id="highDialog" class="col col-lg-2 answerText"></div>
+            </div>
         </div>
 
-
-
-
-
+        <div>
+            <button onclick="read_answers()" class="row justify-content-md-center">Submit</button>
+        </div>
     </div>
+</div>
 
-</body>
-</html>
+{% endblock %}

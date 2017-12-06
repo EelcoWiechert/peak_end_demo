@@ -1,18 +1,344 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Question</title>
-</head>
-<body>
+{% extends 'layout.html' %}
 
-QUESTIONS
-<br><br>
-Just listened to song: {{ gebruiker.current_song }} in list {{ gebruiker.current_list }}
+{% block body %}
 
- <form action="{{ url_for('play_song') }}", method="GET">
-     <button type="submit" name="song">Next song</button>
- </form>
+    <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
 
-</body>
-</html>
+    <script>
+
+    function read_answers() {
+
+        // Valence
+        var valence;
+
+        var radios = document.getElementsByName('valence');
+
+          for (var i = 0, length = radios.length; i < length; i++) {
+              if (radios[i].checked) {
+                 valence = radios[i].value;
+                 break;
+              }
+          }
+
+
+        // Energy
+        var energy;
+
+        var radios = document.getElementsByName('energy');
+
+          for (var i = 0, length = radios.length; i < length; i++) {
+              if (radios[i].checked) {
+                 energy = radios[i].value;
+                 break;
+              }
+          }
+        // Danceability
+        var danceability;
+
+        var radios = document.getElementsByName('danceability');
+
+          for (var i = 0, length = radios.length; i < length; i++) {
+              if (radios[i].checked) {
+                 danceability = radios[i].value;
+                 break;
+              }
+          }
+
+        // Rating
+        var rating;
+
+        var radios = document.getElementsByName('rating');
+
+          for (var i = 0, length = radios.length; i < length; i++) {
+              if (radios[i].checked) {
+                 rating = radios[i].value;
+                 break;
+              }
+          }
+
+        // Rating no preference
+        var ratingNP;
+
+        var radios = document.getElementsByName('ratingNP');
+
+          for (var i = 0, length = radios.length; i < length; i++) {
+              if (radios[i].checked) {
+                 ratingNP = radios[i].value;
+                 break;
+              }
+          }
+
+
+        $.ajax({
+            type: 'POST',
+            url: '{{ url_for('router') }}',
+            dataType: "json",
+            contentType: "application/json",
+            data: JSON.stringify({ energy:energy, valence:valence, danceability:danceability, rating:rating, ratingNP:ratingNP}),
+
+          });
+
+        window.location.href = "{{ url_for( "router" ) }}";
+
+    }
+
+    </script>
+
+<h1>Please answer the following questions about the playlist</h1>
+
+    <div id="questionContainer" class="container">
+
+        <div id="innerQuestionContainer" class="container rb-box">
+            <!-- The Question -->
+            <div class="row justify-content-md-center" style="height: 100px;">
+                <br>
+                <div id="questionDialog" class="col col-lg-12 questionText">
+
+                    How would you rate the valence (i.e. the positivity / negativity) of the song?
+
+                </div>
+            </div>
+
+            <!-- Set neutral point -->
+            <div class="row justify-content-md-center">
+                <div id="neutralPoint" class="col col-lg-1 answerText">
+
+                    Neutral
+
+                </div>
+            </div>
+
+            <!-- The Answers -->
+            <div class="row justify-content-md-center" style="height: 100px;">
+                <div id="lowDialog" class="col col-lg-2 answerText">
+
+                    Negative
+
+                </div>
+                <form id="answers">
+
+                    <input type="radio" name="valence" value="1"/>
+                    <input type="radio" name="valence" value="2"/>
+                    <input type="radio" name="valence" value="3"/>
+                    <input type="radio" name="valence" value="4"/>
+                    <input type="radio" name="valence" value="5"/>
+                    <input type="radio" name="valence" value="6"/>
+                    <input type="radio" name="valence" value="7"/>
+
+                </form>
+                <div id="highDialog" class="col col-lg-2 answerText">
+
+                    Positive
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- QUESTION 2 -->
+
+    <div id="questionContainer" class="container">
+
+        <div id="innerQuestionContainer" class="container rb-box">
+            <!-- The Question -->
+            <div class="row justify-content-md-center" style="height: 100px;">
+                <br>
+                <div id="questionDialog" class="col col-lg-12 questionText">
+
+                    How would you rate the energy of the song?
+
+                </div>
+            </div>
+
+            <!-- Set neutral point -->
+            <div class="row justify-content-md-center">
+                <div id="neutralPoint" class="col col-lg-1 answerText">
+
+                    Neutral
+
+                </div>
+            </div>
+
+            <!-- The Answers -->
+            <div class="row justify-content-md-center" style="height: 100px;">
+                <div id="lowDialog" class="col col-lg-2 answerText">
+
+                    Low
+
+                </div>
+                <form id="answers">
+
+                    <input type="radio" name="energy" value="1"/>
+                    <input type="radio" name="energy" value="2"/>
+                    <input type="radio" name="energy" value="3"/>
+                    <input type="radio" name="energy" value="4"/>
+                    <input type="radio" name="energy" value="5"/>
+                    <input type="radio" name="energy" value="6"/>
+                    <input type="radio" name="energy" value="7"/>
+
+                </form>
+                <div id="highDialog" class="col col-lg-2 answerText">
+
+                    High
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- QUESTION 3 -->
+
+    <div id="questionContainer" class="container">
+
+        <div id="innerQuestionContainer" class="container rb-box">
+            <!-- The Question -->
+            <div class="row justify-content-md-center" style="height: 100px;">
+                <br>
+                <div id="questionDialog" class="col col-lg-12 questionText">
+
+                    How danceable is this song?
+
+                </div>
+            </div>
+
+            <!-- Set neutral point -->
+            <div class="row justify-content-md-center">
+                <div id="neutralPoint" class="col col-lg-1 answerText">
+
+                    Neutral
+
+                </div>
+            </div>
+
+            <!-- The Answers -->
+            <div class="row justify-content-md-center" style="height: 100px;">
+                <div id="lowDialog" class="col col-lg-2 answerText">
+
+                    Not danceable
+
+                </div>
+                <form id="answers">
+
+                    <input type="radio" name="danceability" value="1"/>
+                    <input type="radio" name="danceability" value="2"/>
+                    <input type="radio" name="danceability" value="3"/>
+                    <input type="radio" name="danceability" value="4"/>
+                    <input type="radio" name="danceability" value="5"/>
+                    <input type="radio" name="danceability" value="6"/>
+                    <input type="radio" name="danceability" value="7"/>
+
+                </form>
+                <div id="highDialog" class="col col-lg-2 answerText">
+
+                    Very danceable
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- QUESTION 4 -->
+
+    <div id="questionContainer" class="container">
+
+        <div id="innerQuestionContainer" class="container rb-box">
+            <!-- The Question -->
+            <div class="row justify-content-md-center" style="height: 100px;">
+                <br>
+                <div id="questionDialog" class="col col-lg-12 questionText">
+
+                    How would you rate this playlist?
+
+                </div>
+            </div>
+
+            <!-- Set neutral point -->
+            <div class="row justify-content-md-center">
+                <div id="neutralPoint" class="col col-lg-1 answerText">
+
+
+
+                </div>
+            </div>
+
+            <!-- The Answers -->
+            <div class="row justify-content-md-center" style="height: 100px;">
+                <div id="lowDialog" class="col col-lg-2 answerText">
+
+                    1 Star
+
+                </div>
+                <form id="answers">
+
+                    <input type="radio" name="rating" value="1"/>
+                    <input type="radio" name="rating" value="2"/>
+                    <input type="radio" name="rating" value="3"/>
+                    <input type="radio" name="rating" value="4"/>
+                    <input type="radio" name="rating" value="5"/>
+
+                </form>
+                <div id="highDialog" class="col col-lg-2 answerText">
+
+                    5 Stars
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- QUESTION 5 -->
+
+    <div id="questionContainer" class="container">
+
+        <div id="innerQuestionContainer" class="container rb-box">
+            <!-- The Question -->
+            <div class="row justify-content-md-center" style="height: 100px;">
+                <br>
+                <div id="questionDialog" class="col col-lg-12 questionText">
+
+                    If you would not consider your own musical preferences, how would you rate this song?
+
+                </div>
+            </div>
+
+            <!-- Set neutral point -->
+            <div class="row justify-content-md-center">
+                <div id="neutralPoint" class="col col-lg-1 answerText">
+
+
+
+                </div>
+            </div>
+
+            <!-- The Answers -->
+            <div class="row justify-content-md-center" style="height: 100px;">
+                <div id="lowDialog" class="col col-lg-2 answerText">
+
+                    1 Star
+
+                </div>
+                <form id="answers">
+
+                    <input type="radio" name="ratingNP" value="1"/>
+                    <input type="radio" name="ratingNP" value="2"/>
+                    <input type="radio" name="ratingNP" value="3"/>
+                    <input type="radio" name="ratingNP" value="4"/>
+                    <input type="radio" name="ratingNP" value="5"/>
+
+                </form>
+                <div id="highDialog" class="col col-lg-2 answerText">
+
+                    5 Stars
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <button onclick="read_answers()" class="row justify-content-md-center">Submit</button>
+    </div>
+
+
+{% endblock %}

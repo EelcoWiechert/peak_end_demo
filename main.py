@@ -412,13 +412,46 @@ def question():
             with open(str(gebruiker.name) + '_answers.txt', 'rb') as fp:
                 itemlist = pickle.load(fp)
 
+            print('')
+            print('----------------------------------')
+            print('')
+
+            print('What is currently in the file')
+            print(itemlist)
+
+            print('')
+            print('----------------------------------')
+            print('')
+
+
         # IF NO EXISTING FILE IS AVAILABLE, CREATE AN EMPTY LIST
         except:
             itemlist = []
 
+            print('')
+            print('----------------------------------')
+            print('')
+
+            print('Load empty list')
+
+            print('')
+            print('----------------------------------')
+            print('')
+
         itemlist.append({'answer' : answer, 'question' : question, 'list' : list, 'song': song, 'progress':progress})
 
+
+
+        print('')
+        print('----------------------------------')
+        print('')
+
+        print('To save in the list')
         print(itemlist)
+
+        print('')
+        print('----------------------------------')
+        print('')
 
         # DUMP THE DATA IN THE FILE
         with open(str(gebruiker.name) + '_answers.txt', 'wb') as fp:
@@ -432,34 +465,34 @@ def review_list():
     gebruiker.load_questions()
     gebruiker.no_more_questions = True
 
-    return render_template('question.html', questions=gebruiker.questions)
+    return render_template('question.html')
 
 
-@app.route('/router', methods=['POST'])
+@app.route('/router', methods=['GET, POST'])
 def router():
 
     global status
 
     if request.method == 'POST':
-        valenceLevel = request.form['valence']
-        energyLevel = request.form['energy']
+        valence = request.json['valence']
+        energy = request.json['energy']
+        danceability = request.json['danceability']
+        rating = request.json['rating']
+        ratingNoPreference = request.json['ratingNoPreference']
 
-    print('Level of energy: %s, Level of valence: %s' % (str(energyLevel), str(valenceLevel)))
-    print('Gebruiker done: %s' % gebruiker.done)
+        try:
+            with open(str(gebruiker.name) + '_answers.txt', 'rb') as fp:
+                itemlist = pickle.load(fp)
 
-    try:
-        with open(str(gebruiker.name) + '_answers.txt', 'rb') as fp:
-            itemlist = pickle.load(fp)
+        # IF NO EXISTING FILE IS AVAILABLE, CREATE AN EMPTY LIST
+        except:
+            itemlist = []
 
-    # IF NO EXISTING FILE IS AVAILABLE, CREATE AN EMPTY LIST
-    except:
-        itemlist = []
+        itemlist.append({'question': 'overall', 'valence': valence, 'energy': energy, 'danceability': danceability, 'rating':rating, 'ratingNoPreference':ratingNoPreference})
 
-    itemlist.append({'question': 'overall', 'overallEnergy': energyLevel, 'overallValence': valenceLevel})
-
-    # DUMP THE DATA IN THE FILE
-    with open(str(gebruiker.name) + '_answers.txt', 'wb') as fp:
-        pickle.dump(itemlist, fp)
+        # DUMP THE DATA IN THE FILE
+        with open(str(gebruiker.name) + '_answers.txt', 'wb') as fp:
+            pickle.dump(itemlist, fp)
 
     # REDIRECT
     if gebruiker.done:
