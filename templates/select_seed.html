@@ -13,15 +13,109 @@
       height: auto;
     }
 
+/* The Modal (background) */
+.modal {
+    display: none; /* Hidden by default */
+    position: fixed; /* Stay in place */
+    z-index: 1; /* Sit on top */
+    padding-top: 100px; /* Location of the box */
+    left: 0;
+    top: 0;
+    width: 100%; /* Full width */
+    height: 100%; /* Full height */
+    overflow: auto; /* Enable scroll if needed */
+    background-color: rgb(0,0,0); /* Fallback color */
+    background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+}
+
+/* Modal Content */
+.modal-content {
+    background-color: #fefefe;
+    margin: auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%;
+}
+
+/* The Close Button */
+.close {
+    color: #aaaaaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.close:hover,
+.close:focus {
+    color: #000;
+    text-decoration: none;
+    cursor: pointer;
+}
 </style>
+
+<div id="myModal" class="modal">
+
+<div class="modal-content">
+    <span class="close">&times;</span>
+    <p class="instruction">
+
+        <br>
+        Thank you for participating in our experiment! Before we start, we will provide you some instruction.
+        <br>
+        <br>
+        We have selected 15 songs for you. Your first task is to select the song you would prefer to listen
+        to at this moment. You can listen to previews of the songs when hoovering over the album covers with your mouse.
+        You can select the song and start the listening session by clicking on the album cover.
+        <br>
+        <br>
+        After selecting one of the presented songs, you will listen to two playlists that each contain 7 audio fragments of
+        about 1.5 minutes. You will be asked a series of questions that can be related to the song or the playlist. All
+        questions require an answer. After listening to each list, we will ask you some questions about the list as a whole.
+        <br>
+        <br>
+        During the experiment, you can control the volume of the music with a slider shown on the display. Please adjust
+        the volume to your own preference.
+
+
+    </p>
+  </div>
+
+</div>
+
+<script>
+    // Get the modal
+    var modal = document.getElementById('myModal');
+
+    // Get the <span> element that closes the modal
+    var span = document.getElementsByClassName("close")[0];
+
+    // When the user clicks on <span> (x), close the modal
+    span.onclick = function() {
+        modal.style.display = "none";
+    }
+
+    // When the user clicks anywhere outside of the modal, close it
+    window.onclick = function(event) {
+        if (event.target == modal) {
+            modal.style.display = "none";
+        }
+    }
+</script>
 
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
 
 <script>
 
+    function loadInstructions() {
+        modal.style.display = "block";
+    }
+
+    loadInstructions();
+
     var interval = 3000;  // 1000 = 1 second, 3000 = 3 seconds
 
     function checkDevices() {
+
         $.ajax({
                 type: 'GET',
                 url: '{{ url_for('update_device') }}',
@@ -34,11 +128,11 @@
 
                     if (data['name'] === 'noDevice'){
                         $("#divEle").show();
-                        $("#goToExperimentBut").prop('disabled', true);
+                        $(".albumbutton").prop('disabled', true);
                     }
                     else {
                         $("#divEle").hide();
-                        $("#goToExperimentBut").prop('disabled', false);
+                        $(".albumbutton").prop('disabled', false);
                     }
 
                     },
@@ -57,7 +151,7 @@
 <div class="row">
 
     <div id="divEle" class="alert alert-warning col-lg-12">
-      <strong>Warning!</strong> You currently have no active devices
+      <strong>Warning!</strong> You currently have no active devices. Please activate a Spotify device to continue.
     </div>
 </div>
 
@@ -65,7 +159,7 @@
 
 <style>
 
-    body {
+body {
   font-family: sans-serif;
   background: #42426b;
   background-image: -webkit-linear-gradient(135deg, #8077b7, #97caec);
@@ -73,38 +167,106 @@
   color: rgba(255,255,255,.5);
 }
 
+button {
+
+    background: transparent;
+    border: none !important;
+    font-size:0;
+}
+
 </style>
 
-<div class="back">
         <div class="row justify-content-md-center">
 
-        {% for id in seed %}
+        {% for id in seed[0:5] %}
 
             <div class="col-lg-2">
-                <div class="container">
-                  <img class="image" src="{{ song_dic[id]['album']['images'][1]['url'] }}">
-                    <div class="col-lg-2">
-                        <center>
-                            <audio controls="controls">
-                                <source src="{{ song_dic[id]['preview_url'] }}" type="audio/mpeg"/>
-                            </audio>
-                        </center>
-                     </div>
-                </div>
 
-                <div class="title_show"><p class="song-title">{{ song_dic[id]['name'] }}</p></div>
-                <div class="artist_show"><p class="artist">{{ song_dic[id]['artists'][0]['name']}}</p></div>
+            <div style="height: 5px"></div>
 
-            <div>
-                <center>
-                    <form action="/calrec", method="POST">
-                        <button id="goToExperimentBut" type="submit" name="selected_song" value="{{ song_dic[id]['id'] }}">Select</button>
-                    </form>
-                </center>
+            <div style="height: 173px">
+                <form action="/calrec", method="POST">
+                    <button class="albumbutton" style="height:170px;width:170px" type="hidden" name="selected_song" value="{{ song_dic[id]['id'] }}">
+                        <img id="cover_{{ song_dic[id]['id'] }}" class="albumcover" src="{{ song_dic[id]['album']['images'][1]['url'] }}">
+                    </button>
+                </form>
             </div>
+
+            <audio id="preview_{{ song_dic[id]['id'] }}">
+                <source src="{{ song_dic[id]['preview_url'] }}" type="audio/mpeg"/>
+                Your browser isn't invited for super fun audio time.
+            </audio>
+
+            <div class="song-title">{{ song_dic[id]['name'] }}</div>
+            <div class="artist"> {{ song_dic[id]['artists'][0]['name']}}</div>
 
 
             </div>
+
+            <script>
+
+             var audio_{{ song_dic[id]['id'] }} = $("#preview_{{ song_dic[id]['id'] }}")[0];
+
+             $("#cover_{{ song_dic[id]['id'] }}").mouseenter(function() {
+              console.log("{{ song_dic[id]['id'] }}")
+                audio_{{ song_dic[id]['id'] }}.play();
+            });
+
+            $("#cover_{{ song_dic[id]['id'] }}").mouseleave(function() {
+                  console.log("{{ song_dic[id]['id'] }}")
+                    audio_{{ song_dic[id]['id'] }}.pause();
+                });
+
+            </script>
+
+        {% endfor %}
+
+        </div>
+
+        <div class="row justify-content-md-center">
+
+        {% for id in seed[5:10]%}
+
+           <div class="col-lg-2">
+
+           <div style="height: 15px"></div>
+
+           <div style="height: 173px">
+                <form action="/calrec", method="POST">
+                    <button class="albumbutton" style="height:170px;width:170px" type="hidden" name="selected_song" value="{{ song_dic[id]['id'] }}">
+                        <img id="cover_{{ song_dic[id]['id'] }}" class="albumcover" src="{{ song_dic[id]['album']['images'][1]['url'] }}">
+                    </button>
+                </form>
+            </div>
+
+            <audio id="preview_{{ song_dic[id]['id'] }}">
+                <source src="{{ song_dic[id]['preview_url'] }}" type="audio/mpeg"/>
+                Your browser isn't invited for super fun audio time.
+            </audio>
+
+            <div class="song-title">{{ song_dic[id]['name'] }}</div>
+            <div class="artist"> {{ song_dic[id]['artists'][0]['name']}}</div>
+
+
+            </div>
+
+            <script>
+
+             var audio_{{ song_dic[id]['id'] }} = $("#preview_{{ song_dic[id]['id'] }}")[0];
+
+             $("#cover_{{ song_dic[id]['id'] }}").mouseenter(function() {
+              console.log("{{ song_dic[id]['id'] }}")
+                audio_{{ song_dic[id]['id'] }}.play();
+            });
+
+            $("#cover_{{ song_dic[id]['id'] }}").mouseleave(function() {
+                  console.log("{{ song_dic[id]['id'] }}")
+                    audio_{{ song_dic[id]['id'] }}.pause();
+                });
+
+
+
+            </script>
 
 
 
@@ -112,11 +274,56 @@
 
         </div>
 
+         <div class="row justify-content-md-center">
+
+        {% for id in seed[10:15]%}
+
+           <div class="col-lg-2">
+
+           <div style="height: 15px"></div>
+
+            <div style="height: 173px">
+                <form action="/calrec", method="POST">
+                    <button class="albumbutton" style="height:170px;width:170px" type="hidden" name="selected_song" value="{{ song_dic[id]['id'] }}">
+                        <img id="cover_{{ song_dic[id]['id'] }}" class="albumcover" src="{{ song_dic[id]['album']['images'][1]['url'] }}">
+                    </button>
+                </form>
+            </div>
+
+            <audio id="preview_{{ song_dic[id]['id'] }}">
+                <source src="{{ song_dic[id]['preview_url'] }}" type="audio/mpeg"/>
+                Your browser isn't invited for super fun audio time.
+            </audio>
+
+            <div class="song-title">{{ song_dic[id]['name'] }}</div>
+            <div class="artist"> {{ song_dic[id]['artists'][0]['name']}}</div>
+
+
+            </div>
+
+            <script>
+
+             var audio_{{ song_dic[id]['id'] }} = $("#preview_{{ song_dic[id]['id'] }}")[0];
+
+             $("#cover_{{ song_dic[id]['id'] }}").mouseenter(function() {
+              console.log("{{ song_dic[id]['id'] }}")
+                audio_{{ song_dic[id]['id'] }}.play();
+            });
+
+            $("#cover_{{ song_dic[id]['id'] }}").mouseleave(function() {
+                  console.log("{{ song_dic[id]['id'] }}")
+                    audio_{{ song_dic[id]['id'] }}.pause();
+                });
 
 
 
+            </script>
 
-</div>
+
+
+        {% endfor %}
+
+        </div>
 
 </div>
 

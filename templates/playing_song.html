@@ -7,14 +7,114 @@
 
 <script>
 
-    var interval = 3000;  // 1000 = 1 second, 3000 = 3 seconds
+    var interval = 1000;  // 1000 = 1 second, 3000 = 3 seconds
     var progress;
     var question;
     var noMoreQuestion;
     var questionsActive = false;
     var id;
+    var status;
+    var current_list;
+    var current_song;
+    var songs_to_play;
+    var ready_for_next_song = false;
+    var current_id;
+    var playing;
+
+    function get_songs_to_play() {
+
+         // Request the songs that should be played
+        $.ajax({
+            type: 'GET',
+            url: '{{ url_for('getrec') }}',
+            dataType:"json",
+            success: function (data) {  console.log(data);
+                                        songs_to_play = data;
+            }});
+
+    }
+
+    get_songs_to_play();
 
     function controlPlayer() {
+
+        // Request the current status of the player with a GET request
+        $.ajax({
+            type: 'GET',
+            url: '{{ url_for('music_player') }}',
+            dataType:"json",
+            success: function (data) {
+                console.log(data);
+                noMoreQuestion = data['nomorequestions'];
+                progress = data['progress'];
+                current_list = data['current_list'];
+                current_song = data['current_song'];
+                status = data['status'];
+                id = data['id'];
+                playing = data['playing'];
+            },
+            complete: function () {
+
+                if (playing === false || status === '204') {
+                    console.log('no song is playing');
+
+                    current_id = songs_to_play[current_list][current_song];
+
+                    console.log(current_id);
+
+                    $.ajax({
+                        type: 'POST',
+                        url: '{{ url_for('music_player') }}',
+                        dataType: "json",
+                        contentType: "application/json",
+                        data: JSON.stringify({ current_song: current_song,
+                                               current_id: current_id })
+                    });
+
+                }
+
+                if (progress > 25000 && ready_for_next_song === false) {
+                    if (current_song === 4){
+                        $.ajax({
+                        type: 'POST',
+                        url: '{{ url_for('pause') }}',
+                        dataType: "json",
+                        contentType: "application/json"
+                    });
+
+                        window.location.href = "{{ url_for( "review_list" ) }}";
+
+                    }
+                    else {
+                        if (id === songs_to_play[current_list][current_song]) {
+                            ready_for_next_song = true
+                        }
+                        else {
+                            console.log('previous experiment song is loaded')
+                        }
+                    }
+                }
+
+                if (ready_for_next_song === true && noMoreQuestion === true ) {
+
+                    // play next song
+                    current_song = current_song + 1;
+                    current_id = songs_to_play[current_list][current_song]
+
+                    $.ajax({
+                        type: 'POST',
+                        url: '{{ url_for('music_player') }}',
+                        dataType: "json",
+                        contentType: "application/json",
+                        data: JSON.stringify({ current_song: current_song,
+                                               current_id: current_id }),
+                        complete: function () {
+                            ready_for_next_song = false;
+                        }
+                    });
+                }
+
+            }});
 
         // Request the current status of the player with a GET request
         $.ajax({
@@ -33,7 +133,6 @@
                 // When a track is played
                 else if (data['name'] != 'noName'){
                     id = data['id']
-                    console.log(id)
                     progress = data['progress'];
                     noMoreQuestion = data['nexttrack'];
                 }
@@ -95,7 +194,7 @@
 
                     // When the question should be shown to the user
                     // If this function is not delayed, the questions pop up quickly after each other
-                    var random_wait_time = Math.floor((Math.random() * 3000) + 1000);
+                    var random_wait_time = Math.floor((Math.random() * 1000) + 100);
                     setTimeout(showQuestion, random_wait_time);
 
                 }
@@ -146,7 +245,46 @@ function read_answers() {
 }
 
 </script>
+<div class="row justify-content-md-center">
+    Adjust Volume
+  <input type="range" id="myRange" min="0" max="100" onchange="myFunction()">
+</div>
+
+<script>
+var cvolume;
+
+getVolume();
+
+function myFunction() {
+    var volume_setting = document.getElementById("myRange").value;
+    $.ajax({
+                type: 'POST',
+                url: '{{ url_for('volume') }}',
+                dataType: "json",
+                contentType: "application/json",
+                data: JSON.stringify({ volume: volume_setting})
+              });
+}
+
+function getVolume() {
+    $.ajax({
+                type: 'GET',
+                url: '{{ url_for('update_device') }}',
+                dataType: "json",
+                contentType: "application/json",
+                success: function(data){
+                    cvolume = data['volume_percent']
+                    console.log(cvolume)
+                },
+                complete: function () {
+                    $("#myRange").val(cvolume);
+                }
+              });
+}
+</script>
+
 <div class="back">
+
     <div id="questionContainer" class="container questionBox" style="visibility: hidden;">
 
         <div id="innerQuestionContainer" class="container rb-box">
@@ -170,9 +308,10 @@ function read_answers() {
         </div>
 
         <div>
-            <button onclick="read_answers()" class="row justify-content-md-center">Submit</button>
+            <button id="button" onclick="read_answers()" class="row justify-content-md-center">Submit</button>
         </div>
     </div>
 </div>
+
 
 {% endblock %}

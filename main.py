@@ -82,7 +82,7 @@ def spotify_authorized():
     me = spotify.request('/v1/me')  # LOAD USER PROFILE
     gebruiker = User(me)  # Initialize user
 
-    gebruiker.load_questions()
+    gebruiker.load_questions() # Initialize questions
 
     # COLLECT THE MOST LISTENED TRACKS OF THE USER
     # THE FEATURES VARIABLE INDICATES WHICH FEATURE VALUE OF THE SONGS NEED TO BE ADDED TO THE DICTONARY
@@ -91,40 +91,7 @@ def spotify_authorized():
 
     gebruiker.get_top_tracks(FEATURES, NUMBER_OF_TOP_TRACKS_TO_COLLECT)  # Collect the top tracks of the user
 
-    # CHOOSE A RANDOM SONG FROM THE TOP TRACKS TO SERVE AS INITIAL SEED SONG
-    gebruiker.choose_seed_song()
-
-    song_display_dic = gebruiker.most_listened_tracks
-
     return render_template('select_seed.html', seed=list(gebruiker.top_tracks['id']), song_dic=gebruiker.most_listened_tracks)
-    #return redirect(url_for('find_alternative_songs', seed=gebruiker.seed_song['id']))
-
-
-@app.route('/find_alternative_songs', methods=['GET', 'POST'])
-def find_alternative_songs():
-
-    global seed
-    global alternative_song_dic
-    global gebruiker
-
-    # A GET REQUEST IS MADE WHEN THE SEED SONG IS INITIALLY CHOSEN
-
-    if request.method == 'GET':
-        seed = request.args.get('seed')
-
-    # A POST REQUEST IS MADE WHEN THE USER SELECTS AN ALTERNATIVE SEED SONG
-
-    if request.method == 'POST':
-        seed = str(request.form['song'])
-
-    # GET RECOMMENDATIONS BASED ON THE RANDOMLY SELECTED SEED SONG
-    # ALSO SORT THESE ALTERNATIVE SONGS BASED ON THE FEATURES GIVEN
-    # IN FEATURES_TO_SHOW_ALTERNATIVE_SONGS_ON
-
-    alternative_song_dic = gebruiker.select_alternative_songs(seed, FEATURES_TO_SHOW_ALTERNATIVE_SONGS_ON)
-
-    return render_template('user_seed_selection.html', seed_id=seed, alternatives=alternative_song_dic,
-                           song_dic=gebruiker.most_listened_tracks)
 
 
 @app.route('/calrec', methods=['GET', 'POST'])
@@ -147,185 +114,93 @@ def calrec():
 
     status = 'listeningList1'
 
-    return redirect(url_for('play_song', gebruiker=gebruiker))
+    return redirect(url_for('play_song'))
+
+@app.route('/getrec', methods=['GET', 'POST'])
+def getrec():
+
+    # IDENTIFY GLOBAL VARIABLES
+
+    global gebruiker
+
+    # POST REQUEST MADE BY THE USER THAT SELECTS TO GO TO THE EXPERIMENT
+    if request.method == 'GET':
+        return jsonify(gebruiker.recommendations_to_user)
+
+@app.route('/pause', methods=['GET', 'POST'])
+def pause():
+    # POST REQUEST MADE BY THE USER THAT SELECTS TO GO TO THE EXPERIMENT
+    if request.method == 'POST':
+        url = "https://api.spotify.com/v1/me/player/pause"
+        spotify.put(url=url, format='json')
+        return 'true'
+
+@app.route('/volume', methods=['POST'])
+def volume():
+    # POST REQUEST MADE BY THE USER THAT SELECTS TO GO TO THE EXPERIMENT
+    if request.method == 'POST':
+        volume = request.json['volume']
+        print(volume)
+        url = "https://api.spotify.com/v1/me/player/volume?volume_percent=" + volume
+        spotify.put(url=url, format='json')
+        return 'true'
 
 
 @app.route('/play_song', methods=['GET', 'POST'])
 def play_song():
-    return render_template('playing_song.html')
+    return render_template('playing_song.html', gebruiker=gebruiker)
 
 
 @app.route('/music_player', methods=['GET', 'POST'])
 def music_player():
+
     @spotify.tokengetter
     def get_spotify_oauth_token():
         return session.get('oauth_token')
 
     global gebruiker
-    global status
-    global id
 
-    id = 'noName'
-    name = 'noName'
-    artist = 'noArtist'
-    cover = 'noCover'
-    progress = 'noProgress'
-    timeout = 10000
-    hold = 0
+    if request.method == 'GET':
 
-    print('status')
-    print(status)
-    print(gebruiker.no_more_questions)
+        status_playing = spotify.request('/v1/me/player/currently-playing')
+        progress = 'null'
+        trackid = 'null'
+        name = 'null'
+        artist = 'null'
+        playing = 'null'
 
-    # CHECK CURRENTLY PLAYING TRACK
-    status_playing = spotify.request('/v1/me/player/currently-playing')
-    print('Status Player: %s' % str(status_playing.status))
+        if status_playing.status == 200:
+            progress = status_playing.data['progress_ms']
+            trackid = status_playing.data['item']['id']
+            name = status_playing.data['item']['name']
+            artist = status_playing.data['item']['artists'][0]['name']
+            playing = status_playing.data['is_playing']
 
-    # NO SONG IS LOADED (204) CAN ONLY HAPPEN AT THE START OF THE EXPERIMENT
-    if status_playing.status == 204:
+        if status_playing.status == 202:
+            time.sleep(5)
 
-        print('')
-        print('-------------------------------------------------------------')
-        print('')
-        print('Player status, status = %s' % (str(status_playing.status)))
+        return jsonify({'status':status_playing.status,
+                        'current_list': gebruiker.current_list,
+                        'current_song': gebruiker.current_song,
+                        'progress': progress,
+                        'id': trackid,
+                        'name': name,
+                        'artist': artist,
+                        'playing': playing,
+                        'nomorequestions':gebruiker.no_more_questions})
 
-        # NO SONG IS PLAYING, PLAY SONG
-        id_to_listen = gebruiker.recommendations_to_user['condition_' + str(gebruiker.condition)][
-            'list_' + str(gebruiker.current_list)][gebruiker.current_song]
-        print('Start playing: %s' % id_to_listen)
+    if request.method == 'POST':
 
-        # PLAY SONG
-        payload = {"uris": ["spotify:track:" + id_to_listen]}
+        gebruiker.current_song = request.json['current_song']
+        current_id = request.json['current_id']
+        payload = {"uris": ["spotify:track:" + current_id]}
         url = "https://api.spotify.com/v1/me/player/play?device_id=" + str(gebruiker.active_device['id'])
 
         spotify.put(url=url, data=payload, format='json')
-        id = id_to_listen
         gebruiker.no_more_questions = False
         gebruiker.load_questions()  # RELOAD QUESTIONS
 
-        print('')
-        print('-------------------------------------------------------------')
-        print('')
-
-    # SONG IS LOADED, AND PLAYING (200)
-    if status_playing.status == 200:
-
-        progress = status_playing.data['progress_ms']
-
-        # IF THE SONG IS PLAYED
-        if status_playing.data['is_playing']:
-
-            print('')
-            print('-------------------------------------------------------------')
-            print('')
-
-            print('Currently playing song %s of 5 [List %s]' % (str(gebruiker.current_song + 1),str(gebruiker.current_list)))
-
-            id = status_playing.data['item']['id']
-            name = status_playing.data['item']['name']
-            artist = status_playing.data['item']['artists'][0]['name']
-            cover = status_playing.data['item']['album']['images'][1]['url']
-
-            # WHEN THE TRACK IS PLAYING, WE NEED TO CHECK IF IT IS OVER THE TIME LIMIT
-            if status_playing.data['progress_ms'] > 25000 and gebruiker.no_more_questions:
-
-                # AT END OF SONG, PAUSE THE SONG
-                url = "https://api.spotify.com/v1/me/player/pause"
-                spotify.put(url=url, format='json')
-                gebruiker.current_song += 1
-
-                # AT END OF LIST
-                if gebruiker.current_song == 5:
-                    gebruiker.current_song = 0
-
-                    # IF THE USER IS AT ITS FIRST LIST
-                    if gebruiker.first_list == gebruiker.current_list:
-                        if gebruiker.current_list == 1:
-                            gebruiker.current_list = 2
-                        else:
-                            gebruiker.current_list = 1
-
-                        status = 'evaluateList1'
-                    else:
-                        gebruiker.done = True
-                        status = 'evaluateList2'
-
-            print('')
-            print('-------------------------------------------------------------')
-            print('')
-
-        # IF THE SONG IS PAUSED (START OF THE EXPERIMENT, DURING QUESTION LIST, END OF EXPERIMENT
-        # WE NEED TO MAKE SURE THAT WE ARE NOT PAUSED BECAUSE WE ARE EVALUATING THE LIST
-        elif not (status == 'evaluateList1' or status == 'evaluateList2'):
-            if gebruiker.no_more_questions:
-                print('')
-                print('-------------------------------------------------------------')
-                print('')
-                print('No more questions, start playing song from pause')
-                print(gebruiker.no_more_questions)
-                id_to_listen = gebruiker.recommendations_to_user['condition_' + str(gebruiker.condition)][
-                    'list_' + str(gebruiker.current_list)][gebruiker.current_song]
-
-                payload = {"uris": ["spotify:track:" + id_to_listen]}
-                url = "https://api.spotify.com/v1/me/player/play"
-
-                spotify.put(url=url, data=payload, format='json')
-                gebruiker.no_more_questions = False
-                gebruiker.load_questions()  # RELOAD QUESTIONS
-
-                status_playing = spotify.request('/v1/me/player/currently-playing')
-
-                id = status_playing.data['item']['id']
-                name = status_playing.data['item']['name']
-                artist = status_playing.data['item']['artists'][0]['name']
-                cover = status_playing.data['item']['album']['images'][1]['url']
-
-                print('')
-                print('-------------------------------------------------------------')
-                print('')
-
-            else:
-                print('')
-                print('-------------------------------------------------------------')
-                print('')
-                print('Song is paused, waiting to play next song till all questions are answered')
-                print('')
-                print('-------------------------------------------------------------')
-                print('')
-
-        elif not (status == 'evaluateList1' or status == 'evaluateList2'):
-
-            print('')
-            print('-------------------------------------------------------------')
-            print('')
-            print('Evaluating list')
-            print('')
-            print('-------------------------------------------------------------')
-            print('')
-
-    # BAD CONNECTION
-    if status_playing.status == 202:
-
-        print('')
-        print('-------------------------------------------------------------')
-        print('')
-        print('Error 202')
-        print('')
-        print('-------------------------------------------------------------')
-        print('')
-
-        time.sleep(5)
-
-    return jsonify({'id': id,
-                    'name': name,
-                    'artist': artist,
-                    'cover': cover,
-                    'progress': progress,
-                    'timeout': timeout,
-                    'stage' : status,
-                    'nexttrack': gebruiker.no_more_questions,
-                    'hold': hold})
-
+        return 'true'
 
 @app.route('/update_device', methods=['GET', 'POST'])
 def update_device():
@@ -414,7 +289,7 @@ def question():
         # TRY TO OPEN AN EXISTING FILE
 
         try:
-            with open(str(gebruiker.name) + '_answers.txt', 'rb') as fp:
+            with open('user_data/' + str(gebruiker.name) + '_answers.txt', 'rb') as fp:
                 itemlist = pickle.load(fp)
 
             print('')
@@ -457,7 +332,7 @@ def question():
         print('')
 
         # DUMP THE DATA IN THE FILE
-        with open(str(gebruiker.name) + '_answers.txt', 'wb') as fp:
+        with open('user_data/' + str(gebruiker.name) + '_answers.txt', 'wb') as fp:
             pickle.dump(itemlist, fp)
 
         return 'OK'
@@ -465,8 +340,21 @@ def question():
 @app.route('/review_list', methods=['GET'])
 def review_list():
 
+    global gebruiker
+
     gebruiker.load_questions()
     gebruiker.no_more_questions = True
+    gebruiker.current_song = 0
+
+
+
+    if gebruiker.current_list != gebruiker.first_list:
+        gebruiker.done = True
+    else:
+        if gebruiker.first_list == 'list_1':
+            gebruiker.current_list = 'list_2'
+        else:
+            gebruiker.current_list = 'list_1'
 
     return render_template('question.html')
 
@@ -484,7 +372,7 @@ def router():
         ratingNoPreference = request.json['ratingNoPreference']
 
         try:
-            with open(str(gebruiker.name) + '_answers.txt', 'rb') as fp:
+            with open('user_data/' + str(gebruiker.name) + '_answers.txt', 'rb') as fp:
                 itemlist = pickle.load(fp)
 
         # IF NO EXISTING FILE IS AVAILABLE, CREATE AN EMPTY LIST
@@ -494,7 +382,7 @@ def router():
         itemlist.append({'question': 'overall', 'valence': valence, 'energy': energy, 'danceability': danceability, 'rating':rating, 'ratingNoPreference':ratingNoPreference})
 
         # DUMP THE DATA IN THE FILE
-        with open(str(gebruiker.name) + '_answers.txt', 'wb') as fp:
+        with open('user_data/' + str(gebruiker.name) + '_answers.txt', 'wb') as fp:
             pickle.dump(itemlist, fp)
 
     # REDIRECT
@@ -509,7 +397,6 @@ def router():
 def end():
 
     return 'end of experiment'
-
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1')

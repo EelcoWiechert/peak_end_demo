@@ -82,12 +82,10 @@ class User(object):
         # Intitialize other information
         self.most_listened_tracks = []
         self.seed_song = dict()
-        # self.condition = random.choice([1,2,3])
-        self.condition = 3
-        # self.first_list = random.choice([1,2])
-        self.first_list = 1
+        self.first_list = random.choice(['list_1','list_2'])
         self.current_list = 0
         self.current_song = 0
+        self.status = 0
         self.devices = dict()
         self.active_device = {"id": "noDevice",
                               "is_active": "noDevice",
@@ -98,8 +96,9 @@ class User(object):
                               }
         self.recommendations = []
         self.done = False
-        self.no_more_questions = True
+        self.no_more_questions = False
         self.top_tracks = None
+        self.song_done = False
 
         itemlist = []
 
@@ -130,23 +129,17 @@ class User(object):
             else:
                 break  # break when there is no next page
 
+        DF_top_tracks = pd.DataFrame(self.most_listened_tracks)
+        DF_top_tracks.to_csv('user_data/' + str(self.name) + '_toptracks.txt')  # write the top tracks to a file for later analysis
         self.most_listened_tracks = {x["id"]: x for x in self.most_listened_tracks}
-
-        list_of_ID = list(self.most_listened_tracks.keys())
-
-        #with open(str(self.name) + '_toptracks.txt', 'w') as fp:
-            #fp.write(list_of_ID)
+        list_of_ID = list(DF_top_tracks['id'])
 
         # Get audio features
 
         while len(list_of_ID) > 0:
-
-            # CREATE REQUEST LINK
-            track_ids_string = ''
-
-            for ID in list_of_ID[:100]:
+            track_ids_string = ''  # CREATE REQUEST LINK
+            for ID in list_of_ID[:100]: # REQUEST THE AUDIO FEATURES PER 100
                 track_ids_string += str(ID) + ','
-
             link = track_ids_string[:-1]
             features_recommended_tracks = spotify.request('/v1/audio-features/?ids=' + str(link))
 
@@ -165,15 +158,20 @@ class User(object):
 
             list_of_ID = list_of_ID[100:]
 
-            remove = self.top_tracks.nsmallest(40, 'energy')
-            remove.append(self.top_tracks.nlargest(40, 'energy'))
+        number_of_tracks = len(list(self.top_tracks.index))
+        number_to_remove = number_of_tracks * 0.40
 
-            for track in list(remove.index):
-                remove.drop([track])
+        remove = self.top_tracks.nsmallest(int(number_to_remove), ['energy'])
+        remove = remove.append(self.top_tracks.nlargest(int(number_to_remove), ['energy']))
 
-            self.top_tracks = remove.sample(n=5)
+        self.top_tracks = pd.concat([self.top_tracks, remove]).drop_duplicates(keep=False)
 
-            print(self.top_tracks)
+        if len(list(self.top_tracks.index)) > 15:
+            self.top_tracks = self.top_tracks.sample(n=15)
+        else:
+            self.top_tracks = self.top_tracks.sample(n=len(list(self.top_tracks.index)))
+
+        self.top_tracks.to_csv('user_data/' + str(self.name) + '_recommended_tracks.txt')  # write the top tracks to a file for later analysis
 
     '''
     
@@ -182,58 +180,7 @@ class User(object):
     '''
 
     def load_questions(self):
-
-        self.questions = json.load(open('questions.json'))
-
-    '''
-    
-    Choose the seed song random from the users' top tracks
-    
-    '''
-
-    def choose_seed_song(self):
-
-        # CHOOSE A SEED SONG
-        self.seed_song['id'] = random.choice(list(self.most_listened_tracks.keys()))
-        self.seed_song['data'] = self.most_listened_tracks[self.seed_song['id']]
-
-    '''
-
-    Select a random set of 50 songs and postion them relative to the seed song.
-    The alternative songs are presented in containers as given in the discriminating features
-
-    '''
-
-    def select_alternative_songs(self, seed, discriminating_features):
-
-        # GET CHARACTERISTICS
-        seed_characteristics = self.most_listened_tracks[seed]
-
-        alternative_song_dic = {}
-
-        for feature in discriminating_features:
-            alternative_song_dic[feature] = {'lower': [], 'higher': []}
-
-        for i in range(50):
-            seed_id, t_features = random.choice(list(self.most_listened_tracks.items()))
-
-            for feature, lists in alternative_song_dic.items():
-                if t_features[feature] > seed_characteristics[feature]:
-                    lists['higher'].append(seed_id)
-                else:
-                    lists['lower'].append(seed_id)
-
-        # Shuffle the list to avoid that the same albums are shown to the user
-
-        for feature, lists in alternative_song_dic.items():
-            if len(lists['higher']) > 0:
-                random.shuffle(lists['higher'])
-                lists['higher'] = lists['higher'][:6]
-            if len(lists['lower']) > 0:
-                random.shuffle(lists['lower'])
-                lists['lower'] = lists['lower'][:6]
-
-        return alternative_song_dic
+        self.questions = json.load(open('questions_during_listening.json'))
 
     '''
     
@@ -242,8 +189,6 @@ class User(object):
     '''
 
     def calculate_recommendations(self, seed_id, features):
-
-        # Initizalize tokengetter
 
         @spotify.tokengetter
         def get_spotify_oauth_token():
@@ -257,7 +202,7 @@ class User(object):
         self.recommendations = {x["id"]: x for x in recommendations.data['tracks']}
 
         track_ids_string = ''
-        for identifier in list(self.recommendations.keys()):
+        for identifier in set(self.recommendations.keys()):
             track_ids_string += str(identifier) + ','
 
         track_ids_string = track_ids_string[:-1]
@@ -271,7 +216,6 @@ class User(object):
 
         self.df_features = pd.DataFrame(features_recommended_tracks.data['audio_features'])
         self.df_features.set_index('id', inplace=True)
-        print(self.df_features.head())
 
         # CREATE AN ARRAY THAT CONTAINS THE FEATURE VALUES
         array = []
@@ -348,88 +292,33 @@ class User(object):
             except:
                 continue
 
-        self.recommendations_to_user = {'condition_1': {'list_1': [], 'list_2': []},
-                                        'condition_2': {'list_1': [], 'list_2': []},
-                                        'condition_3': {'list_1': [], 'list_2': []}}
-
-        '''
-        
-        CREATE CONDITION 1
-        
-        '''
+        self.recommendations_to_user = {'list_1': [], 'list_2': []}
 
         # LIST 1 - PEAK_END
 
-        self.recommendations_to_user['condition_1']['list_1'].append(low[0])
-        self.recommendations_to_user['condition_1']['list_1'].append(high[0])
-        self.recommendations_to_user['condition_1']['list_1'].append(low[1])
-        self.recommendations_to_user['condition_1']['list_1'].append(low[2])
-        self.recommendations_to_user['condition_1']['list_1'].append(end[0])
+        self.recommendations_to_user['list_1'].append(low[0])
+        self.recommendations_to_user['list_1'].append(high[0])
+        self.recommendations_to_user['list_1'].append(low[1])
+        self.recommendations_to_user['list_1'].append(low[2])
+        self.recommendations_to_user['list_1'].append(end[0])
 
         # LIST 2 - AVERAGE
 
-        self.recommendations_to_user['condition_1']['list_2'].append(peak_end_value[0])
-        self.recommendations_to_user['condition_1']['list_2'].append(peak_end_value[1])
-        self.recommendations_to_user['condition_1']['list_2'].append(peak_end_value[2])
-        self.recommendations_to_user['condition_1']['list_2'].append(peak_end_value[3])
-        self.recommendations_to_user['condition_1']['list_2'].append(peak_end_value[4])
+        self.recommendations_to_user['list_2'].append(peak_end_value[0])
+        self.recommendations_to_user['list_2'].append(peak_end_value[1])
+        self.recommendations_to_user['list_2'].append(peak_end_value[2])
+        self.recommendations_to_user['list_2'].append(peak_end_value[3])
+        self.recommendations_to_user['list_2'].append(peak_end_value[4])
 
-        '''
+        self.feature_values = {'list_1': [], 'list_2': []}
 
-        CREATE CONDITION 2
-
-        '''
-
-        # LIST 1 - PEAK_END
-
-        self.recommendations_to_user['condition_2']['list_1'].append(low[0])
-        self.recommendations_to_user['condition_2']['list_1'].append(high[0])
-        self.recommendations_to_user['condition_2']['list_1'].append(low[1])
-        self.recommendations_to_user['condition_2']['list_1'].append(low[2])
-        self.recommendations_to_user['condition_2']['list_1'].append(end[0])
-
-        # LIST 2 - PEAK_END
-
-        self.recommendations_to_user['condition_2']['list_2'].append(middle[0])
-        self.recommendations_to_user['condition_2']['list_2'].append(middle[1])
-        self.recommendations_to_user['condition_2']['list_2'].append(middle[2])
-        self.recommendations_to_user['condition_2']['list_2'].append(middle[3])
-        self.recommendations_to_user['condition_2']['list_2'].append(middle[4])
-
-        '''
-
-        CREATE CONDITION 3
-
-        '''
-
-        # LIST 1 - PEAK_END
-
-        self.recommendations_to_user['condition_3']['list_1'].append(low[0])
-        self.recommendations_to_user['condition_3']['list_1'].append(high[0])
-        self.recommendations_to_user['condition_3']['list_1'].append(low[1])
-        self.recommendations_to_user['condition_3']['list_1'].append(low[2])
-        self.recommendations_to_user['condition_3']['list_1'].append(end[0])
-
-        # LIST 2 - PEAK_END
-
-        self.recommendations_to_user['condition_3']['list_2'].append(average[0])
-        self.recommendations_to_user['condition_3']['list_2'].append(average[1])
-        self.recommendations_to_user['condition_3']['list_2'].append(average[2])
-        self.recommendations_to_user['condition_3']['list_2'].append(average[3])
-        self.recommendations_to_user['condition_3']['list_2'].append(average[4])
-
-        self.feature_values = {'condition_1': {'list_1': [], 'list_2': []},
-                               'condition_2': {'list_1': [], 'list_2': []},
-                               'condition_3': {'list_1': [], 'list_2': []}}
-
-        for condition, lists in self.recommendations_to_user.items():
-            for l, i in lists.items():
-                for identifier in i:
-                    self.feature_values[condition][l].append(self.recommendations[identifier][features[0]])
+        for l, items in self.recommendations_to_user.items():
+            for identifier in items:
+                self.feature_values[l].append(self.recommendations[identifier][features[0]])
 
         # row and column sharing
         x = [1, 2, 3, 4, 5]
-        f, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2)
+        f, (ax1, ax2) = plt.subplots(1, 2)
 
         # SET TITLE
         axis_font = {'fontname': 'Arial', 'size': '14'}
@@ -439,71 +328,7 @@ class User(object):
 
         ax1.set_ylim([0, 1])
         ax2.set_ylim([0, 1])
-        ax3.set_ylim([0, 1])
-        ax4.set_ylim([0, 1])
-        ax5.set_ylim([0, 1])
-        ax6.set_ylim([0, 1])
 
-        ax1.plot(x, self.feature_values['condition_1']['list_1'])
-        ax2.plot(x, self.feature_values['condition_1']['list_2'])
-        ax3.plot(x, self.feature_values['condition_2']['list_1'])
-        ax4.plot(x, self.feature_values['condition_2']['list_2'])
-        ax5.plot(x, self.feature_values['condition_3']['list_1'])
-        ax6.plot(x, self.feature_values['condition_3']['list_2'])
+        ax1.plot(x, self.feature_values['list_1'])
+        ax2.plot(x, self.feature_values['list_2'])
         plt.savefig('Peak-End_plot of ' + str(self.name) + '.pdf')
-
-
-class Analytics(object):
-
-    def __init__(self):
-        self.features_of_interest = ['valence', 'energy', 'danceability', "speechiness", "acousticness",
-                                     "instrumentalness", "liveness"]
-
-    def user_characteristics_plot(self, user, song_display_dic):
-
-        datalists = {}
-
-        for feature in self.features_of_interest:
-            datalists[feature] = []
-
-        for track, features in song_display_dic.items():
-            for f in self.features_of_interest:
-                datalists[f].append(features[f])
-
-        # Two subplots, unpack the axes array immediately
-        n_bins = 20
-        plt.rcParams.update({'font.size': 6})
-        f, (ax1, ax2, ax3, ax4, ax5, ax6, ax7) = plt.subplots(1, len(self.features_of_interest), sharey=True)
-        ax1.hist(datalists[self.features_of_interest[0]], n_bins, normed=1, histtype='bar', stacked=True)
-        ax2.hist(datalists[self.features_of_interest[1]], n_bins, normed=1, histtype='bar', stacked=True)
-        ax3.hist(datalists[self.features_of_interest[2]], n_bins, normed=1, histtype='bar', stacked=True)
-        ax4.hist(datalists[self.features_of_interest[3]], n_bins, normed=1, histtype='bar', stacked=True)
-        ax5.hist(datalists[self.features_of_interest[4]], n_bins, normed=1, histtype='bar', stacked=True)
-        ax6.hist(datalists[self.features_of_interest[5]], n_bins, normed=1, histtype='bar', stacked=True)
-        ax7.hist(datalists[self.features_of_interest[6]], n_bins, normed=1, histtype='bar', stacked=True)
-
-        ax1.set_title(self.features_of_interest[0], fontsize=6)
-        ax2.set_title(self.features_of_interest[1], fontsize=6)
-        ax3.set_title(self.features_of_interest[2], fontsize=6)
-        ax4.set_title(self.features_of_interest[3], fontsize=6)
-        ax5.set_title(self.features_of_interest[4], fontsize=6)
-        ax6.set_title(self.features_of_interest[5], fontsize=6)
-        ax7.set_title(self.features_of_interest[6], fontsize=6)
-
-        ax1.set_xlim(0, 1)
-        ax2.set_xlim(0, 1)
-        ax3.set_xlim(0, 1)
-        ax4.set_xlim(0, 1)
-        ax5.set_xlim(0, 1)
-        ax6.set_xlim(0, 1)
-        ax7.set_xlim(0, 1)
-
-        with open('user_data.json') as data_file:
-            data = json.load(data_file)
-
-        data[user] = datalists
-
-        with open('user_data.json', 'w') as file:
-            file.write(json.dumps(data))
-
-        plt.savefig('figure_map/user_profile_' + user + '.png', dpi=1000)
